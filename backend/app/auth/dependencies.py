@@ -1,0 +1,11 @@
+from fastapi.security import OAuth2PasswordBearer
+from passlib.context import CryptContext
+
+# password encrypt
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+# auth token
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"/api/v1/auth/login")
+optional_oauth2_scheme = OAuth2PasswordBearer(
+    tokenUrl="/api/v1/auth/login", auto_error=False
+)
