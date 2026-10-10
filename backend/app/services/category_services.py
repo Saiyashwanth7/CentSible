@@ -40,6 +40,9 @@ async def list_categories(user_id: int, session: AsyncSession) -> list[Category]
 
 # get category by id
 # check if the category belongs to the actual user
+""" THIS FUNCTION WILL HELP US TO BOTH GET THE CATEGORY RECORD AND ACTS AS A CHECK FOR RELATION BETWEEN CATEGORY AND USER"""
+
+
 async def get_category(
     category_id: int, user_id: int, session: AsyncSession
 ) -> Category:

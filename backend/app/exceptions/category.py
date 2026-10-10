@@ -2,7 +2,7 @@ from app.exceptions.base import AppException
 
 
 # doesn't exists
-class CategoryDoesntExists(AppException):
+class CategoryDoesNotExist(AppException):
     status_code = 404
     default_detail = "Category not found"
 

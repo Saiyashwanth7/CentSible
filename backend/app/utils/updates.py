@@ -14,4 +14,4 @@ def apply_updates(
             if field not in blank_on_none:
                 continue
             value = ""
-        setattr(obj, field, value)
+        setattr(obj, field, value)  # => set attribute obj.field = value

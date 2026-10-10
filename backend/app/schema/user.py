@@ -8,6 +8,10 @@ from app.utils.normalizations import (
 )
 from app.utils.validations import validate_password_strength
 
+"""
+    RESPONSE basemodels are used by the APIs, remaining are used in the business logic
+"""
+
 
 class UserResponse(BaseModel):
     id: int
