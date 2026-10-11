@@ -29,7 +29,7 @@ class CategoryResponse(BaseModel):
 
 # category reassign request
 class CategoryReassignRequest(BaseModel):
-    to_category_ind: int
+    to_category_id: int
 
 
 # category reassign response

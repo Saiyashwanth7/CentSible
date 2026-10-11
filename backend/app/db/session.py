@@ -3,6 +3,8 @@ from typing import AsyncGenerator
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from app.core.config import settings
+from typing import Annotated
+from fastapi import Depends
 
 # here we are using the async_driver_database_url property from the settings of the stage. The stage is determined by the get_appenvtype function from the basesettings
 engine = create_async_engine(settings.async_driver_database_url)
@@ -32,3 +34,6 @@ async def get_session() -> AsyncGenerator[AsyncSession, None]:
         except Exception:
             await session.rollback()
             raise
+
+
+SessionDep = Annotated[AsyncSession, Depends(get_session, scope="function")]

@@ -153,7 +153,7 @@ Authentication uses cookies, so call `/auth/login` first. In Swagger, open `http
 ### 1. Clone and install
 
 ```bash
-git clone <your-repo-url>
+git clone https://github.com/Saiyashwanth7/CentSible.git
 cd CentSible/backend
 python -m venv venv
 source venv/bin/activate        # Windows: venv\Scripts\activate
