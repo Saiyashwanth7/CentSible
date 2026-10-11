@@ -105,9 +105,9 @@ async def create_recurring(
 
 # update recurring
 async def update_recurring(
-    data: RecurringUpdate, user_id: int, session: AsyncSession
+    recurring_id: int, data: RecurringUpdate, user_id: int, session: AsyncSession
 ) -> RecurringExpense:
-    recurring = await get_recurring(data.category_id, user_id, session)
+    recurring = await get_recurring(recurring_id, user_id, session)
     updates = data.model_dump(exclude_unset=True)
     if (
         updates.get("category_id") is not None
