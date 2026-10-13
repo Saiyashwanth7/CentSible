@@ -19,7 +19,7 @@ class RecurringCreate(BaseModel):
     frequency: Frequency
     start_date: Date
 
-    @field_validator
+    @field_validator("start_date")
     @classmethod
     def not_too_old(cls, v: Date) -> Date:
         if (today_local() - v).days > 366:

@@ -13,18 +13,20 @@ CategoryName = Annotated[
 
 # category create
 class CategoryCreate(BaseModel):
-    name = CategoryName
+    name: CategoryName
 
 
 # category update
 class CategoryUpdate(BaseModel):
-    name = CategoryName
+    name: CategoryName
 
 
 # category response
 class CategoryResponse(BaseModel):
     id: int
     name: str  # here name is not categoryName bacause this pydantic model will to get reponse from DB, not from the user, so no contraints needed
+
+    model_config = {"from_attributes": True}
 
 
 # category reassign request

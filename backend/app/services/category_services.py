@@ -16,7 +16,7 @@ from app.utils.categorization import DEFAULT_CATEGORIES, FALLBACK_CATEGORY
 
 # _is_protected
 def _is_protected(name: str) -> bool:
-    return name.strip().lower() == FALLBACK_CATEGORY
+    return name.strip().lower() == FALLBACK_CATEGORY.lower()
 
 
 # seed default categories
@@ -57,28 +57,25 @@ async def get_category(
 # get category by name
 async def get_category_by_name(
     name: str, user_id: int, session: AsyncSession
-) -> Category:
-    result = await session.scalar(
+) -> Category | None:
+    return await session.scalar(
         select(Category).where(
             func.lower(Category.name) == name.strip().lower(),
             Category.owner_id == user_id,
         )
     )
-    if result is None:
-        raise CategoryDoesNotExist
-    return result
 
 
 # create category
 async def create_category(
     user_id: int, data: CategoryCreate, session: AsyncSession
 ) -> Category:
-    if get_category_by_name(data.name, user_id, session):
+    if await get_category_by_name(data.name, user_id, session):
         raise CategoryAlreadyExists
     category = Category(owner_id=user_id, name=data.name)
     session.add(category)
     await session.flush()
-    return category
+    return await get_category(category.id, user_id, session)
 
 
 # rename catgeory
@@ -94,7 +91,7 @@ async def rename_category(
     category.name = data.name
     session.add(category)
     await session.flush()
-    return category
+    return await get_category(category.id, user_id, session)
 
 
 # delete category

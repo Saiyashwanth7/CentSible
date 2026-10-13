@@ -3,7 +3,7 @@ from app.routers.dependencies import CurrentUser, SessionDep
 from app.schema.insights import Trends, MonthTotal
 from app.services import insight_services
 
-router = APIRouter
+router = APIRouter()
 
 
 @router.get("/trends", response_model=Trends)

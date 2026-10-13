@@ -13,6 +13,7 @@ from app.models.users import User
 from app.schema.user import UserCreate
 from app.auth.password import hash_password
 from app.utils.logging import Logger, LogLevel
+from app.services.category_services import seed_default_categories
 
 
 # get user by id
@@ -20,7 +21,7 @@ async def get_user_by_id(id: int, session: AsyncSession) -> User:
     result = await session.execute(select(User).where(User.id == id))
     user = result.scalars().first()
     if not user:
-        raise UserIdDoesNotExist
+        raise UserIdDoesNotExist(id)
     return user
 
 
@@ -29,7 +30,7 @@ async def get_user_by_email(email: str, session: AsyncSession) -> User:
     result = await session.execute(select(User).where(User.email == email))
     user = result.scalars().first()
     if not user:
-        raise UserEmailDoesNotExist
+        raise UserEmailDoesNotExist(email)
     return user
 
 
@@ -38,7 +39,7 @@ async def get_user_by_google_id(google_id: str, session: AsyncSession) -> User:
     result = await session.execute(select(User).where(User.google_id == google_id))
     user = result.scalars().first()
     if not user:
-        raise UserGoogleIdDoesNotExist
+        raise UserGoogleIdDoesNotExist()
     return user
 
 
@@ -54,16 +55,20 @@ async def create_user_with_password(
     result = await session.execute(select(User).where(User.email == email))
     existing = result.scalars().first()
     if existing:
-        raise UserAlreadyExists
+        raise UserAlreadyExists(email)
 
     # if user doesn't exist, then add the user details to the db
     user = User(
         email=email,
         hashed_password=hashed_password,
-        **user_model.model_dump(exclude={"email", "password", "confirm_password"}),
+        **user_model.model_dump(
+            exclude={"email", "password", "confirm_password", "google_id"}
+        ),
     )
+
     session.add(user)
     await session.flush()
+    await seed_default_categories(user.id, session)
     return user
 
 
@@ -77,7 +82,7 @@ async def create_user_without_password(
     result = await session.execute(select(User).where(User.email == email))
     existing = result.scalars().first()
     if existing:
-        raise UserAlreadyExists
+        raise UserAlreadyExists(email)
 
     # now, save the user excluding the password and confirm password, which remains, cleaned email, and google_id in user_model
 
@@ -87,6 +92,7 @@ async def create_user_without_password(
     )
     session.add(user)
     await session.flush()
+    await seed_default_categories(user.id, session)
     return user
 
 

@@ -1,9 +1,8 @@
-from pydantic import BaseModel
-from decimal import Decimal
-from app.schema.common import MoneyIn, MoneyOut
 from typing import Literal
 
-# budget update + insert; BudgetUpsert
+from pydantic import BaseModel
+
+from app.schema.common import MoneyIn, MoneyOut
 
 
 class BudgetUpsert(BaseModel):
@@ -11,15 +10,12 @@ class BudgetUpsert(BaseModel):
     monthly_limit: MoneyIn
 
 
-# budget status
-
-
 class BudgetStatus(BaseModel):
     id: int
     category_id: int
     category: str
-    monthly_limit = MoneyOut
+    monthly_limit: MoneyOut
     spent: MoneyOut
     remaining: MoneyOut
-    percentage = float
-    status = Literal["OK", "WARNING", "OVER"]
+    percent: float
+    status: Literal["ok", "warning", "over"]

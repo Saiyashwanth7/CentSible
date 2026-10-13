@@ -14,7 +14,7 @@ router = APIRouter()
 
 
 # get
-@router.get("", response_model=ExpenseResponse)
+@router.get("", response_model=ExpenseListResponse)
 async def get_expense(
     user: CurrentUser,
     filters: FiltersDep,

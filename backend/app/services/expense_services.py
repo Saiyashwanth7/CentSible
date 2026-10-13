@@ -71,7 +71,7 @@ async def list_expenses(
     session: AsyncSession,
 ) -> tuple[list[Expense], int]:
     base = _apply_filters(select(Expense).where(Expense.owner_id == user_id), filters)
-    total = await session.scalars(select(func.sum()).select_from(base.subquery())) or 0
+    total = await session.scalar(select(func.count()).select_from(base.subquery())) or 0
     stmt = (
         base.options(selectinload(Expense.category))
         .order_by(Expense.date.desc(), Expense.id.desc())
@@ -90,7 +90,7 @@ async def create_expense(
     expense = Expense(**data.model_dump(), owner_id=user_id)
     session.add(expense)
     await session.flush()
-    return expense
+    return await get_expense(expense.id, user_id, session)
 
 
 # update expense
@@ -188,21 +188,25 @@ async def export_expenses_csv(
     user_id: int, filters: ExpenseFilters, session: AsyncSession
 ) -> str:
     stmt = (
-        _apply_filters(select(Expense).where(Expense.owner_id == user_id), filters)
+        _apply_filters(
+            select(Expense).where(Expense.owner_id == user_id),
+            filters,
+        )
         .options(selectinload(Expense.category))
         .order_by(Expense.date.desc(), Expense.id.desc())
     )
-    expense = (await session.execute(stmt)).all()
-    output = io.StringIO
+
+    expenses = (await session.scalars(stmt)).all()
+    output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow(["ID", "Title", "Amount", "Category", "Date", "Notes"])
-    for e in expense:
+    for e in expenses:
         writer.writerow(
             [
                 e.id,
                 _csv_safe(e.title),
                 e.amount,
-                _csv_safe(e.category),
+                _csv_safe(e.category.name if e.category else ""),
                 e.date,
                 _csv_safe(e.notes),
             ]

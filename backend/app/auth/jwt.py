@@ -70,7 +70,7 @@ def store_access_token(response: Response, access_token: str) -> None:
 
 
 def store_refresh_token(response: Response, refresh_token: str) -> None:
-    expire_time_from_days_to_seconds = 24 * 60 * 60 * settings.refresh_token_expire_days
+    expire_time_from_days_to_seconds = 60 * 60 * 24 * settings.refresh_token_expire_days
     response.set_cookie(
         key="refresh_token",
         value=refresh_token,
