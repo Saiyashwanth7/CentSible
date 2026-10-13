@@ -147,30 +147,30 @@ async def get_dashboard_stats(
     rows = (await session.execute(breakdown_stmt)).all()
 
     today = today_local()
-    this_month_stmt = (
-        _apply_filters(
-            select(func.coalesce(func.sum(Expense.amount), 0)).where(
-                Expense.owner_id == user_id,
-                Expense.date >= shift_month(today, 0),
-                Expense.date < shift_month(today, 1),
-            )
+    this_month_stmt = _apply_filters(
+        select(func.coalesce(func.sum(Expense.amount), 0)).where(
+            Expense.owner_id == user_id,
+            Expense.date >= shift_month(today, 0),
+            Expense.date < shift_month(today, 1),
         ),
         filters,
     )
 
-    this_month = await session.execute(this_month_stmt)
+    this_month = await session.scalar(this_month_stmt)
 
     dashboard_stats = DashboardStats(
         total_spent=sum(
-            Decimal(r[2]) for r in rows
+            (Decimal(r[2]) for r in rows), ZERO
         ),  # r[2] because total_amount is in the 2nd zeorth index
         total_this_month=Decimal(this_month or 0),
         total_expenses=sum(
-            Decimal(r[3]) for r in rows
+            r[3] for r in rows
         ),  # r[3] because total_expense_count is in the 3rd zeorth index
         # Category.id, Category.name, total_amount, total_expense_count
         category_breakdown=[
-            CategorySummary(category_id=r[0], category=r[1], total=r[2], count=r[3])
+            CategorySummary(
+                category_id=r[0], category=r[1], total=Decimal(r[2]), count=r[3]
+            )
             for r in rows
         ],
     )

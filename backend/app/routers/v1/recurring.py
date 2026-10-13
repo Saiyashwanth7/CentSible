@@ -17,7 +17,7 @@ async def get_recurring(user: CurrentUser, session: SessionDep):
 async def create_recurring(
     data: RecurringCreate, user: CurrentUser, session: SessionDep
 ):
-    return await recurring_services.update_recurring(data, user.id, session)
+    return await recurring_services.create_recurring(user.id, data, session)
 
 
 # update recurring
@@ -26,7 +26,7 @@ async def update_recurring(
     recurring_id: int, data: RecurringUpdate, user: CurrentUser, session: SessionDep
 ):
     return await recurring_services.update_recurring(
-        recurring_id, data, user.id, session
+        recurring_id, user.id, data, session
     )
 
 

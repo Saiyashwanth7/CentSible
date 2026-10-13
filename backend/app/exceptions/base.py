@@ -1,4 +1,4 @@
-class AppException:
+class AppException(Exception):
     status_code: int = 400
     default_detail: str = "Something went wrong"
 

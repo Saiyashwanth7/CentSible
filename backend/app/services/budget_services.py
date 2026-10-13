@@ -21,11 +21,11 @@ def _build_status(budget: Budget, spent: Decimal) -> BudgetStatus:
     limit = budget.monthly_limit
     percent = (spent / limit) * 100
     if spent > limit:
-        status = "OVER"
+        status = "over"
     elif percent > WARNING_THRESHOLD:
-        status = "WARNING"
+        status = "warning"
     elif percent <= WARNING_THRESHOLD:
-        status = "OK"
+        status = "ok"
     return BudgetStatus(
         id=budget.id,
         category_id=budget.category_id,

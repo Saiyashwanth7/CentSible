@@ -11,7 +11,7 @@ async def get_budgets(user: CurrentUser, session: SessionDep) -> list[BudgetStat
     return await budget_services.list_budget_statuses(user.id, session)
 
 
-@router.post("", response_model=BudgetUpsert)
+@router.post("", response_model=list[BudgetUpsert])
 async def upsert_budget(user: CurrentUser, data: BudgetUpsert, session: SessionDep):
     return await budget_services.upsert_budget(user.id, data, session)
 

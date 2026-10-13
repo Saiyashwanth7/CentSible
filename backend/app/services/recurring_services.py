@@ -14,7 +14,6 @@ from app.utils.stats import today_local
 from app.utils.updates import apply_updates
 
 
-# get recurring
 async def get_recurring(
     recurring_id: int, user_id: int, session: AsyncSession
 ) -> RecurringExpense:
@@ -27,12 +26,11 @@ async def get_recurring(
         .execution_options(populate_existing=True)
     )
     recurring = (await session.scalars(stmt)).first()
-    if not recurring:
+    if recurring is None:
         raise RecurringExpenseDoesNotExist
     return recurring
 
 
-# list recurring
 async def list_recurring(user_id: int, session: AsyncSession) -> list[RecurringExpense]:
     stmt = (
         select(RecurringExpense)
@@ -43,24 +41,22 @@ async def list_recurring(user_id: int, session: AsyncSession) -> list[RecurringE
     return list((await session.scalars(stmt)).all())
 
 
-# materialize due: this function will take care of creating new expense records for all the recurring expenses of a user or all the users.
-# The today and user_id is optional becuase we may use this function for all the users at a time,
+# Turn every due recurring item into real expenses and move its next_date forward.
+# Run this from a scheduled Celery task (user_id=None = all users).
+# Safe to run twice: rows are locked, and next_date moves forward in the same transaction.
 async def materialize_due(
-    today: date | None, user_id: int | None, session: AsyncSession
+    session: AsyncSession, user_id: int | None = None, today: date | None = None
 ) -> int:
     today = today or today_local()
     stmt = (
         select(RecurringExpense)
-        .where(RecurringExpense.next_date <= today, RecurringExpense.active.is_(True))
-        .with_for_update(
-            skip_locked=True
-        )  # when multiple celery workers start working on this, we need to flag already advanced record so other workers don't create duplicate expense
+        .where(RecurringExpense.active.is_(True), RecurringExpense.next_date <= today)
+        .with_for_update(skip_locked=True)
     )
     if user_id is not None:
         stmt = stmt.where(RecurringExpense.owner_id == user_id)
 
     created = 0
-
     for recurring in (await session.scalars(stmt)).all():
         while recurring.next_date <= today:
             session.add(
@@ -69,7 +65,8 @@ async def materialize_due(
                     amount=recurring.amount,
                     category_id=recurring.category_id,
                     date=recurring.next_date,
-                    notes=recurring.notes,
+                    notes=recurring.notes or "Recurring",
+                    owner_id=recurring.owner_id,
                 )
             )
             recurring.next_date = advance(
@@ -80,9 +77,8 @@ async def materialize_due(
     return created
 
 
-# create recurring
 async def create_recurring(
-    data: RecurringCreate, user_id: int, session: AsyncSession
+    user_id: int, data: RecurringCreate, session: AsyncSession
 ) -> RecurringExpense:
     await get_category(data.category_id, user_id, session)
     recurring = RecurringExpense(
@@ -103,30 +99,27 @@ async def create_recurring(
     return await get_recurring(recurring.id, user_id, session)
 
 
-# update recurring
 async def update_recurring(
-    recurring_id: int, data: RecurringUpdate, user_id: int, session: AsyncSession
+    recurring_id: int, user_id: int, data: RecurringUpdate, session: AsyncSession
 ) -> RecurringExpense:
     recurring = await get_recurring(recurring_id, user_id, session)
     updates = data.model_dump(exclude_unset=True)
-    if (
-        updates.get("category_id") is not None
-    ):  # here usually category_id would be none if the user doesn't want to update the category, but if the user wants to update the category_id, we must check if the category_id belongs to the user_id or not
+    if updates.get("category_id") is not None:
         await get_category(updates["category_id"], user_id, session)
-    # We must make sure the user is not updating an active recurring expense, and we should not allow it, This resume is being used to adjust the next_date is paused recurring expenses, if next_date in a paused update requested recurring expense was in past, then we need to update the next_date based on the frequency of that recurring expense
-    resume = updates.get("active") is True and not recurring.active
+
+    resuming = updates.get("active") is True and not recurring.active
     apply_updates(recurring, updates, blank_on_none=("notes",))
-    if resume:
+    if resuming:
+        # skip the time it was paused instead of back-filling it
         today = today_local()
         while recurring.next_date < today:
-            recurring.next_date = await advance(
+            recurring.next_date = advance(
                 recurring.next_date, recurring.frequency, recurring.anchor_day
             )
     await session.flush()
-    return await get_recurring(recurring.id, user_id, session)
+    return await get_recurring(recurring_id, user_id, session)
 
 
-# delete recurring
 async def delete_recurring(
     recurring_id: int, user_id: int, session: AsyncSession
 ) -> None:

@@ -49,6 +49,6 @@ async def reassign_category(
     session: SessionDep,
 ):
     moved = await category_services.reassign_category(
-        category_id, data.to_category_ind, user.id, session
+        category_id, data.to_category_id, user.id, session
     )
     return CategoryReassignResponse(moved=moved)
