@@ -71,6 +71,9 @@ class BaseAppSettings(BaseSettings):
     brevo_api_key: str | None = None
     from_email: str | None = None
 
+    # celery
+    celery_broker_url: str | None = None
+
     # @property would just let the user get the function return without calling it (with the "()" brackets)
     @property
     def async_driver_database_url(self) -> str:

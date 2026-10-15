@@ -1,0 +1,7 @@
+{
+  "email": "user@gmail.com",
+  "name": "user",
+  "google_id": "",
+  "password": "user@Password-1",
+  "confirm_password": "user@Password-1"
+}

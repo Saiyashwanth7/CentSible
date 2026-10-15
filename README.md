@@ -264,9 +264,9 @@ pytest
 - [x] Business logic services (categories, expenses, budgets, insights, recurring, import)
 - [x] Password reset flow, end to end
 - [ ] Google sign-in flow
-- [ ] REST routers for all services
-- [ ] Redis-backed refresh token revocation and rate limiting
-- [ ] Scheduled Celery task for recurring expenses
+- [x] REST routers for all services
+- [x] Redis-backed refresh token revocation and rate limiting
+- [x] Scheduled Celery task for recurring expenses
 - [ ] Receipt scanning with Cloudflare R2
 - [ ] Automated tests and CI
 - [ ] Dockerfile and cloud deployment

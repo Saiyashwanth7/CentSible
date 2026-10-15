@@ -89,7 +89,7 @@ async def create_user_without_password(
     user = User(
         email=email,
         **user_model.model_dump(exclude={"email", "password", "confirm_password"}),
-    )
+    )  # remains only google auth id
     session.add(user)
     await session.flush()
     await seed_default_categories(user.id, session)
