@@ -179,7 +179,7 @@ async def get_dashboard_stats(
 
 # _csv_safe
 def _csv_safe(value) -> str:
-    text = "" if value is None else value
+    text = "" if value is None else str(value)
     return "`" + text if text[:1] in ("=", "+", "-", "@", "\t", "\r") else text
 
 
