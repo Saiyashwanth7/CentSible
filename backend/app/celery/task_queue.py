@@ -25,7 +25,9 @@ celery_task_queue.conf.update(
     beat_schedule={
         "materialize-recurring-expenses": {
             "task": "task_materialize_recurring_expenses",
-            "schedule": crontab(hour=0, minute=10),
+            "schedule": crontab(
+                hour=0, minute=10
+            ),  # crontab("*"),  -> for testing beat scheduling
         },
     },
 )
