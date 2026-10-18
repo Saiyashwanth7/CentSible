@@ -1,0 +1,12 @@
+import { Link } from "react-router-dom";
+
+function Landing() {
+  return (
+    <div>
+      <h1>Landing page</h1>
+      <Link to="/login">Login ki vellu</Link>
+    </div>
+  );
+}
+
+export default Landing;
