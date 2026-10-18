@@ -68,3 +68,21 @@ Volume is the storage provided by the docker for the service container. Postgres
 
 - redis ki=> - redis_data:/data
 - rabbitmq ki=> - rabbitmq_data:/var/lib/rabbitmq
+
+## commands used to delete a service and restart it
+
+```bash
+docker compose stop postgres
+
+docker compose rm -f postgres
+
+docker volume ls
+
+docker volume rm backend_postgres_data
+
+docker-compose up -d
+
+docker-compose ps
+
+alembic upgrade head
+```
