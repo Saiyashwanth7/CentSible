@@ -56,3 +56,32 @@ export function logout() {
   return apiFetch("/auth/logout", { method: "POST" });
 }
 ```
+
+## JSON.stringify and URLSearchParams():
+
+Ee rendu kuda information ni backend API suitable format lo change cheyyadaniki vadutham, JSON.stringify vadithe data JSON format lo untundhi, URLSearchParams vadithe data HTML ki suitable formatlo return chesthundhi. Overall use okate kani returning formats veru
+
+If an API's request body in swagger UI says:
+
+- application/json: then we use JSON.stringify + Content-Type
+- application/x-www-form-urlencoded: then we use URLSearchParams()
+
+## Overall frontend architecture:
+
+main.jsx (start)
+->
+App.jsx (URL mapping)
+->
+pages/Login.jsx (oka screen) <- components/Navbar.jsx (chinna UI part)
+->
+api/auth.js (backend call) The main URL stays in here, this needs to be triggered/called
+->
+api/index.js (fetch)
+->
+backend
+
+An api/<file_name>.js file function can be triggered by a button or by the useEffect
+
+// onChange typing ni detect chestundi
+// useState value ni gurthupettukuntundi (memory)
+// setEmail value ni marchi, screen update cheyistundi

@@ -21,6 +21,8 @@ import { Routes, Route } from "react-router-dom";
 import Landing from "./pages/Landing/Landing";
 import Login from "./pages/Auth/Login";
 import NotFound from "./pages/NotFound/NotFound";
+import AuthCallback from "./pages/Auth/AuthCallBack";
+import Register from "./pages/Auth/Register";
 
 function App() {
   return (
@@ -28,6 +30,8 @@ function App() {
       <Route path="/" element={<Landing />} />
       <Route path="/login" element={<Login />} />
       <Route path="*" element={<NotFound />} />
+      <Route path="/auth/callback" element={<AuthCallback />} />
+      <Route path="/register" element={<Register />}></Route>
     </Routes>
   );
 }

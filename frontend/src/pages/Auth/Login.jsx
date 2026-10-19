@@ -1,31 +1,61 @@
-// import { Link } from "react-router-dom";
-
-// function Login() {
-//   return (
-//     <div>
-//       <h1>Login page</h1>
-//       <Link to="/">Landing ki vellu</Link>
-//     </div>
-//   );
-// }
-
-// export default Login;
-
+import { useState } from "react";
+import { login } from "../../api/auth";
 import { useNavigate } from "react-router-dom";
+import { Box, Button, TextField, Typography } from "@mui/material";
 
 function Login() {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const navigate = useNavigate();
+  const [error, setError] = useState("");
 
-  function handleLogin() {
-    // asalu lo ikkada backend login call untundi
-    navigate("/");
+  async function handleSubmit() {
+    try {
+      await login(email, password);
+      navigate("/");
+    } catch (error) {
+      setError("Email or Password is incorrect");
+    }
+  }
+
+  function handleGoogleLogin() {
+    window.location.href = import.meta.env.VITE_API_URL + "/auth/google/";
   }
 
   return (
-    <div>
-      <h1>Login page</h1>
-      <button onClick={handleLogin}>Login</button>
-    </div>
+    <Box
+      sx={{
+        maxWidth: 400,
+        mx: "auto",
+        mt: 8,
+        display: "flex",
+        flexDirection: "column",
+        gap: 2,
+      }}
+    >
+      <Typography variant="h4">Login</Typography>
+
+      <TextField
+        label="Email"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+      />
+      <TextField
+        label="Password"
+        type="password"
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+      />
+
+      {error && <Typography color="error">{error}</Typography>}
+
+      <Button variant="contained" onClick={handleSubmit}>
+        Login
+      </Button>
+      <Button variant="outlined" onClick={handleGoogleLogin}>
+        Login with Google
+      </Button>
+    </Box>
   );
 }
 
