@@ -1,19 +1,23 @@
 import { useState } from "react";
 import { login } from "../../api/auth";
-import { useNavigate } from "react-router-dom";
+import { data, useNavigate } from "react-router-dom";
 import { Box, Button, TextField, Typography } from "@mui/material";
+import { useAuth } from "../../contexts/AuthContext";
 
 function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const navigate = useNavigate();
   const [error, setError] = useState("");
+  const { setUser } = useAuth();
 
   async function handleSubmit() {
     try {
-      await login(email, password);
+      const data = await login(email, password);
+      setUser(data);
       navigate("/");
-    } catch (error) {
+    } catch (err) {
+      console.log(err);
       setError("Email or Password is incorrect");
     }
   }

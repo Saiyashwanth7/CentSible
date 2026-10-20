@@ -1,15 +1,10 @@
-import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { getCurrentUser } from "../../api/user";
+import { useAuth } from "../../contexts/AuthContext";
 
 function Landing() {
-  const [user, setUser] = useState(null);
+  const { user, loading } = useAuth();
 
-  useEffect(() => {
-    getCurrentUser()
-      .then((data) => setUser(data))
-      .catch(() => setUser(null));
-  }, []);
+  if (loading) return <p>Loading...</p>;
 
   return (
     <div>
