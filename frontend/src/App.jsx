@@ -7,24 +7,30 @@ import Register from "./pages/Auth/Register";
 import AuthorizedRoute from "./components/ProtectedRoutes/AuthorizedRoute";
 import UnauthorizedRoute from "./components/ProtectedRoutes/UnauthorizedRoute";
 import Account from "./pages/Account/Account";
+import Navbar from "./components/Navbar/Navbar";
+import Expenses from "./pages/Expenses/Expenses";
 
 function App() {
   return (
-    <Routes>
-      <Route path="/" element={<Landing />} />
-      <Route path="/auth/callback" element={<AuthCallback />} />
+    <>
+      <Navbar />
+      <Routes>
+        <Route path="/" element={<Landing />} />
+        <Route path="/auth/callback" element={<AuthCallback />} />
 
-      <Route element={<UnauthorizedRoute />}>
-        <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
-      </Route>
+        <Route element={<UnauthorizedRoute />}>
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
+        </Route>
 
-      <Route element={<AuthorizedRoute />}>
-        <Route path="/account" element={<Account />} />
-      </Route>
+        <Route element={<AuthorizedRoute />}>
+          <Route path="/account" element={<Account />} />
+          <Route path="/expenses" element={<Expenses />} />
+        </Route>
 
-      <Route path="*" element={<NotFound />} />
-    </Routes>
+        <Route path="*" element={<NotFound />} />
+      </Routes>
+    </>
   );
 }
 
