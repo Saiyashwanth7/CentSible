@@ -263,7 +263,7 @@ pytest
 - [x] Email delivery through Brevo, queued with Celery
 - [x] Business logic services (categories, expenses, budgets, insights, recurring, import)
 - [x] Password reset flow, end to end
-- [ ] Google sign-in flow
+- [x] Google sign-in flow
 - [x] REST routers for all services
 - [x] Redis-backed refresh token revocation and rate limiting
 - [x] Scheduled Celery task for recurring expenses
