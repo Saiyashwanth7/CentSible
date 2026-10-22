@@ -1,10 +1,10 @@
 # CentSible
 
-A personal expense management backend. Users track expenses, set monthly budgets, import bank statements, automate recurring charges, and get spending insights through a REST API.
+A personal expense management app. Users track expenses, set monthly budgets, import bank statements, automate recurring charges, and get spending insights through a REST API, with a React frontend on top.
 
-Built with **FastAPI**, **async SQLAlchemy 2.0**, **PostgreSQL**, **Redis** and **Celery**.
+The backend is built with **FastAPI**, **async SQLAlchemy 2.0**, **PostgreSQL**, **Redis**, **RabbitMQ** and **Celery**. The frontend is built with **React**, **Vite** and **MUI**.
 
-> Status: backend in active development, frontend not started. See [Roadmap](#roadmap) for what is done.
+> Status: the backend is feature complete except receipt scanning. The frontend is in progress (auth and expenses are working). See the [Roadmap](#roadmap) for details.
 
 ---
 
@@ -17,7 +17,7 @@ Built with **FastAPI**, **async SQLAlchemy 2.0**, **PostgreSQL**, **Redis** and 
 - Access tokens are rejected automatically if issued before the user's last password change
 - Refresh token rotation and revocation backed by Redis (logout really logs out)
 - Password reset by email: single-use tokens, stored only as SHA-256 hashes, 15-minute expiry, identical responses whether or not the email exists
-- Sign in with Google (OAuth 2.0 / OpenID Connect)
+- Sign in with Google (OAuth 2.0 / OpenID Connect). The same flow handles both first-time signup and later logins
 
 **Expense tracking**
 
@@ -44,9 +44,15 @@ Built with **FastAPI**, **async SQLAlchemy 2.0**, **PostgreSQL**, **Redis** and 
 - Suggests a category from the user's own history first, then keyword rules
 - Flags likely duplicates before anything is saved
 
-**Receipt scanning (optional)**
+**Background jobs**
 
-- Upload a receipt photo, get a pre-filled expense back (merchant, total, date, category) using an LLM with schema-validated output
+- Welcome, password reset and password reset confirmation emails are sent by Celery workers, so API responses never wait on the email provider
+- Failed email tasks retry with exponential backoff and jitter
+- A Celery beat schedule creates due recurring expenses every day at 00:10 (Asia/Kolkata)
+
+**Receipt scanning (in progress)**
+
+- Upload a receipt photo, get a pre-filled expense back (merchant, total, date, category) using an LLM through OpenRouter with schema-validated output
 - Images stored in Cloudflare R2, served through short-lived presigned URLs
 
 ---
@@ -58,15 +64,34 @@ Built with **FastAPI**, **async SQLAlchemy 2.0**, **PostgreSQL**, **Redis** and 
 | API                   | Python 3.11+, FastAPI, Pydantic v2                        |
 | Database              | PostgreSQL, SQLAlchemy 2.0 (async), Alembic               |
 | Auth                  | python-jose (JWT), passlib/bcrypt, Authlib (Google OAuth) |
-| Background jobs       | Celery, Redis                                             |
+| Background jobs       | Celery (worker and beat), RabbitMQ as the broker          |
 | Cache and token store | Redis                                                     |
-| Email                 | Brevo transactional email API                             |
+| Email                 | Brevo transactional email API (template based)            |
 | File storage          | Cloudflare R2 (S3-compatible)                             |
+| Frontend              | React (JavaScript), Vite, MUI, React Router               |
 | Tooling               | Docker, Docker Compose, pytest                            |
 
 ---
 
 ## Architecture
+
+### Request flow
+
+```
+Browser (React, localhost:5173)
+   |  fetch with cookies
+   v
+FastAPI (localhost:8000) ---------> PostgreSQL
+   |
+   |  task.delay(...)
+   v
+RabbitMQ ---> Celery worker ---> Brevo (emails) / PostgreSQL (recurring expenses)
+   ^
+   |  daily at 00:10 IST
+Celery beat
+```
+
+### Backend layers
 
 The code is layered so each part has one job:
 
@@ -86,7 +111,9 @@ backend/
   alembic/                  database migrations
   app/
     auth/                   JWT, password hashing, current-user dependency, Google OAuth
-    celery/                 Celery app and background tasks
+    celery/
+      task_queue.py         Celery app, reliability settings, beat schedule
+      tasks/                email_tasks.py, recurring_tasks.py
     core/                   settings (environment variables)
     db/                     async engine, session, declarative base
     enums/                  Frequency, email template ids, environments
@@ -98,15 +125,50 @@ backend/
     services/               business logic
     utils/                  CSV importer, recurrence math, stats helpers
     main.py
+  docker-compose.yml        PostgreSQL, Redis, RabbitMQ for local development
 ```
+
+### Frontend layout
+
+The frontend mirrors the backend: one file in `src/api/` per backend router, one folder in `src/pages/` per screen.
+
+```
+frontend/src/
+  main.jsx                  entry point: Router and AuthProvider wrap the app
+  App.jsx                   URL to page mapping, route groups
+  api/
+    index.js                apiFetch: the only place that calls fetch()
+    auth.js                 login, logout, password reset calls
+    user.js                 register, current user
+    categories.js           category list
+    expenses.js             expense list, create, update, delete, CSV export
+  contexts/
+    AuthContext.jsx         loads the current user once and shares it with every page
+  components/
+    Navbar/
+    ProtectedRoutes/        AuthorizedRoute (logged in only), UnauthorizedRoute (guests only)
+  pages/
+    Landing/  Auth/  Expenses/  Account/  NotFound/
+```
+
+Route groups:
+
+| Group      | Who can open it  | Routes                  |
+| ---------- | ---------------- | ----------------------- |
+| Public     | Everyone         | `/`, `/auth/callback`   |
+| Guest only | Logged out users | `/login`, `/register`   |
+| Logged in  | Logged in users  | `/expenses`, `/account` |
 
 ### Design decisions worth knowing
 
 - **Money is `Numeric(10, 2)` / `Decimal`, never float**, so totals never drift.
 - **Cookie auth, not bearer headers**, so tokens can't be stolen by injected scripts.
 - **Recurring expenses are generated by a scheduled job**, not as a side effect of reading data.
+- **Celery tasks are safe to run twice.** Tasks are acknowledged only after they finish (`task_acks_late`), so a task from a crashed worker is handed to another worker. The recurring task only creates what is still due, and a duplicate email is harmless.
+- **Each recurring task run builds a throwaway async engine with `NullPool`.** Celery tasks are plain functions that start their own event loop with `asyncio.run()`, and pooled connections from the app's shared engine are tied to one loop.
 - **Deleting a category that is in use is blocked**; the user moves its expenses to another category first. Budgets for a deleted category are removed by the database (`ON DELETE CASCADE`).
 - **Aggregations run in SQL** (`GROUP BY`), not in Python.
+- **The frontend never decides who the user is.** It sends cookies, and the backend filters every query by the user in the token.
 
 ---
 
@@ -124,22 +186,29 @@ User 1---* Category 1---* Expense
 
 ## API overview
 
-Interactive docs are served at `/docs` (Swagger UI) while the app runs.
+Base URL: `http://localhost:8000/api/v1`. Interactive docs are served at `/docs` (Swagger UI) while the app runs.
 
-| Group          | Endpoints                                                                         |
-| -------------- | --------------------------------------------------------------------------------- |
-| Auth           | `POST /v1/auth/login`, `POST /v1/auth/refresh`, `POST /v1/auth/logout`            |
-| Users          | `POST /v1/user/register`, `GET /v1/user/current`                                  |
-| Password reset | `POST /v1/password-reset/request`, `/validate`, `/confirm`                        |
-| Categories     | list, create, rename, delete, reassign expenses                                   |
-| Expenses       | list (filters and pagination), create, get, update, delete, dashboard, CSV export |
-| Budgets        | list with status, upsert, delete                                                  |
-| Insights       | `GET /v1/insights/trends`                                                         |
-| Recurring      | list, create, update (pause or resume), delete                                    |
-| Import         | `POST /v1/import/preview`, `POST /v1/import/commit`                               |
-| Receipts       | `POST /v1/receipts/scan`                                                          |
+| Group          | Endpoints                                                                                                          |
+| -------------- | ------------------------------------------------------------------------------------------------------------------ |
+| Auth           | `POST /auth/login`, `POST /auth/refresh`, `POST /auth/logout`                                                      |
+| Google sign-in | `GET /auth/google/` (redirects to Google), `GET /auth/google/callback`                                             |
+| Users          | `POST /user/register`, `GET /user/current`                                                                         |
+| Password reset | `POST /auth/password-reset/request`, `/validate`, `/confirm`                                                       |
+| Categories     | `GET /category`, plus create, rename, delete, reassign expenses                                                    |
+| Expenses       | `GET /expense`, `POST /expense`, `PUT /expense/{id}`, `DELETE /expense/{id}`, `GET /expense/export/csv`, dashboard |
+| Budgets        | list with status, upsert, delete                                                                                   |
+| Insights       | `GET /insights/trends`                                                                                             |
+| Recurring      | list, create, update (pause or resume), delete                                                                     |
+| Import         | `POST /import/preview`, `POST /import/commit`                                                                      |
+| Receipts       | `POST /receipts/scan` (in progress)                                                                                |
 
-Authentication uses cookies, so call `/auth/login` first. In Swagger, open `http://127.0.0.1:8000/docs` (same host the cookie is saved for) and protected endpoints will work after you log in.
+Things that are easy to get wrong when calling the API:
+
+- **Login is form data, not JSON.** Send `application/x-www-form-urlencoded` with the fields `username` (the email) and `password`. Almost every other endpoint takes JSON.
+- **Authentication uses cookies**, so call `/auth/login` first. Tokens are set as `HttpOnly` cookies. From a browser, requests must include credentials (`credentials: "include"` with `fetch`).
+- `GET /expense` accepts the query params `category_id`, `start_date`, `end_date`, `search`, `page` (default 1) and `page_size` (default 20, max 100). It returns `{ items, total, pages, page_size }`.
+- Creating an expense takes `title`, `amount` (a number), `category_id`, `date` (`YYYY-MM-DD`) and `notes`, and returns `201`.
+- Deleting an expense returns `204` with no body.
 
 ---
 
@@ -148,9 +217,10 @@ Authentication uses cookies, so call `/auth/login` first. In Swagger, open `http
 ### Prerequisites
 
 - Python 3.11+
-- Docker (for PostgreSQL and Redis)
+- Node.js (LTS)
+- Docker (for PostgreSQL, Redis and RabbitMQ)
 
-### 1. Clone and install
+### 1. Clone and install the backend
 
 ```bash
 git clone https://github.com/Saiyashwanth7/CentSible.git
@@ -160,71 +230,122 @@ source venv/bin/activate        # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-### 2. Start PostgreSQL and Redis
+### 2. Configure environment variables
 
-Example `docker-compose.yml` for local development:
-
-```yaml
-services:
-  postgres:
-    image: postgres:16
-    environment:
-      POSTGRES_USER: centsible
-      POSTGRES_PASSWORD: centsible
-      POSTGRES_DB: centsible
-    ports: ["5432:5432"]
-    volumes: ["pgdata:/var/lib/postgresql/data"]
-  redis:
-    image: redis:7
-    ports: ["6379:6379"]
-volumes:
-  pgdata:
-```
-
-```bash
-docker compose up -d
-```
-
-### 3. Configure environment variables
-
-Copy `.env.example` to `.env` and fill it in. Names below are indicative; the source of truth is `app/core/config.py`.
+Copy `.env.example` to `.env` and fill it in. The source of truth for names is `app/core/settings/base.py`. Docker Compose reads the same `.env` file, so the database and RabbitMQ credentials are defined once.
 
 ```env
 # App
 APP_ENV=DEVELOPMENT
-DEBUG=true
 FRONTEND_URL=http://localhost:5173
 
-# Database and Redis
-DATABASE_URL=postgresql+asyncpg://centsible:centsible@localhost:5432/centsible
-REDIS_URL=redis://localhost:6379/0
+# Database (these values are also used to create the PostgreSQL container)
+DATABASE_NAME=centsible
+DATABASE_USER=postgres
+DATABASE_PASSWORD=your-db-password
+DATABASE_HOST=localhost
+DATABASE_PORT=5433
 
-# JWT
+# Redis
+REDIS_HOST=localhost
+REDIS_PORT=6379
+REDIS_DB=0
+
+# RabbitMQ (used by Docker Compose and by the Celery broker URL below)
+RABBITMQ_USER=centsible_rabbitmq
+RABBITMQ_PASSWORD=your-rabbitmq-password
+CELERY_BROKER_URL=amqp://centsible_rabbitmq:your-rabbitmq-password@localhost:5672//
+
+# JWT and sessions
 ACCESS_SECRET_KEY=change-me
 REFRESH_SECRET_KEY=change-me-too
-JWT_ENCRYPTION_ALGORITHM=HS256
-ACCESS_TOKEN_EXPIRE_MINUTES=30
-REFRESH_TOKEN_EXPIRE_DAYS=30
+SESSION_SECRET_KEY=change-me-three
 
 # Google OAuth (Google Cloud Console -> APIs & Services -> Credentials)
 GOOGLE_CLIENT_ID=
 GOOGLE_CLIENT_SECRET=
+GOOGLE_REDIRECT_URL=http://localhost:8000/api/v1/auth/google/callback
 
 # Email (Brevo)
 BREVO_API_KEY=
 FROM_EMAIL=
 
-# Cloudflare R2
-R2_ACCOUNT_ID=
-R2_ACCESS_KEY_ID=
-R2_SECRET_ACCESS_KEY=
-R2_BUCKET=
-
-# Receipt scanning (optional)
-AI_API_KEY=
+# Cloudflare R2 (S3-compatible object storage)
+BUCKET_NAME=
+BUCKET_ACCESS_KEY_ID=
+BUCKET_SECRET_KEY=
+BUCKET_REGION=auto
+BUCKET_ENDPOINT_URL=https://<your-account-id>.r2.cloudflarestorage.com
 ```
 
-Generate strong secrets with `python -c "import secrets; print(secrets.token_urlsafe(48))"`.
+Generate strong secrets with `python -c "import secrets; print(secrets.token_urlsafe(48))"`. Never commit `.env`.
+
+### 3. Start PostgreSQL, Redis and RabbitMQ
+
+`backend/docker-compose.yml`:
+
+```yaml
+services:
+  postgres:
+    image: postgres:16
+    container_name: centsible-pg
+    restart: unless-stopped
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_USER: ${DATABASE_USER}
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD}
+      POSTGRES_DB: ${DATABASE_NAME}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DATABASE_USER} -d ${DATABASE_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    restart: unless-stopped
+    ports:
+      - "5672:5672" # Celery connects here
+      - "15672:15672" # management dashboard
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
+  redis_data:
+  rabbitmq_data:
+```
+
+```bash
+docker compose up -d
+docker compose ps        # all three should show "healthy"
+```
+
+The RabbitMQ dashboard is at `http://localhost:15672` (log in with `RABBITMQ_USER` and `RABBITMQ_PASSWORD`).
 
 ### 4. Run migrations
 
@@ -232,18 +353,82 @@ Generate strong secrets with `python -c "import secrets; print(secrets.token_url
 alembic upgrade head
 ```
 
-### 5. Start the API and the worker
+### 5. Start the API, the worker and the scheduler
+
+Run each in its own terminal, from the `backend` folder with the virtual environment active:
 
 ```bash
 # API
 uvicorn app.main:app --reload
 
-# Celery worker and scheduler (adjust the module path to your Celery app)
-celery -A app.celery.celery_app worker --loglevel=info
-celery -A app.celery.celery_app beat --loglevel=info
+# Celery worker (on Windows keep --pool=solo, on Linux or macOS you can drop it)
+celery -A app.celery.task_queue worker --loglevel=info --pool=solo
+
+# Celery beat (scheduler for recurring expenses)
+celery -A app.celery.task_queue beat --loglevel=info
 ```
 
-Open `http://127.0.0.1:8000/docs`.
+When the worker starts, its task list should show four tasks: `task_send_welcome_email`, `task_send_password_reset_email`, `task_send_password_reset_confirmation_email` and `task_materialize_recurring_expenses`.
+
+To test the recurring task without waiting for 00:10:
+
+```bash
+python -c "from app.celery.tasks.recurring_tasks import task_materialize_recurring_expenses as t; t.delay()"
+```
+
+### 6. Start the frontend
+
+```bash
+cd ../frontend
+```
+
+Create `frontend/.env`:
+
+```env
+VITE_API_URL=http://localhost:8000/api/v1
+```
+
+```bash
+npm install
+npm run dev
+```
+
+Open `http://localhost:5173`. The API docs are at `http://localhost:8000/docs`.
+
+### Email setup (Brevo)
+
+Emails use Brevo templates, so a few one-time steps are needed:
+
+1. Create a free Brevo account and generate an API key (SMTP and API settings), then put it in `BREVO_API_KEY`.
+2. Verify your sender address in Brevo and use the same address in `FROM_EMAIL`.
+3. Brevo blocks API calls from unknown IP addresses. Add your IP under Security, Authorised IPs (or turn IP blocking off for development).
+4. Create three transactional templates and put their ids in `app/enums/email_templates.py`:
+
+| Template                    | Variables the code sends                      |
+| --------------------------- | --------------------------------------------- |
+| Welcome                     | `{{ params.name }}`                           |
+| Password reset              | `{{ params.name }}`, `{{ params.reset_url }}` |
+| Password reset confirmation | `{{ params.name }}`                           |
+
+Make sure each template is activated, otherwise Brevo reports `template not exists`.
+
+### Google sign-in setup
+
+1. In Google Cloud Console, create an OAuth client and add `http://localhost:8000/api/v1/auth/google/callback` as an authorized redirect URI.
+2. Set `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` and `GOOGLE_REDIRECT_URL` in `.env`. The redirect URL must match the Google Console entry exactly.
+3. The login flow is: the frontend sends the browser to `GET /auth/google/`, Google authenticates the user, the backend sets the auth cookies on `/auth/google/callback` and redirects to `FRONTEND_URL/auth/callback`.
+
+---
+
+## Development notes and common gotchas
+
+- **Use `localhost` everywhere, never mix it with `127.0.0.1`.** Browsers treat them as different hosts. Mixing them causes cookies not to be sent and Google login to fail with `mismatching_state`. This applies to the frontend URL, the API URL, the Google redirect URL and the Google Console entry.
+- **Restart the Celery worker and beat after changing code or `.env`.** They load everything once at startup and do not auto-reload like `uvicorn --reload`.
+- **PostgreSQL and RabbitMQ credentials are only applied the first time their volume is created.** To change them, run `docker compose down -v` (this deletes the data) and start again.
+- **`DATABASE_PORT` must be `5433`** because the compose file maps host port 5433 to the container's 5432.
+- **Vite only reads `.env` at startup**, and only variables that start with `VITE_`. Restart `npm run dev` after editing it.
+- **Check `git status` before committing.** `.env`, `venv/`, `node_modules/`, `__pycache__/` and `celerybeat-schedule*` must be ignored.
+- **React StrictMode runs effects twice in development**, so you will see duplicate requests in the backend log. This does not happen in a production build.
 
 ---
 
@@ -253,24 +438,46 @@ Open `http://127.0.0.1:8000/docs`.
 pytest
 ```
 
+Automated tests are still on the roadmap.
+
 ---
 
 ## Roadmap
 
+**Backend**
+
 - [x] Project structure, settings, async database layer
 - [x] Models and migrations (users, categories, expenses, budgets, recurring, reset tokens)
 - [x] Cookie-based JWT auth with refresh and password-change invalidation
-- [x] Email delivery through Brevo, queued with Celery
+- [x] Email delivery through Brevo, queued with Celery and RabbitMQ
 - [x] Business logic services (categories, expenses, budgets, insights, recurring, import)
 - [x] Password reset flow, end to end
 - [x] Google sign-in flow
 - [x] REST routers for all services
-- [x] Redis-backed refresh token revocation and rate limiting
+- [x] Redis-backed refresh token revocation
 - [x] Scheduled Celery task for recurring expenses
-- [ ] Receipt scanning with Cloudflare R2
+- [x] Local infrastructure with Docker Compose (PostgreSQL, Redis, RabbitMQ)
+- [ ] Receipt scanning with Cloudflare R2 and OpenRouter
+- [ ] Redis rate limiting (login, password reset, receipt upload)
+- [ ] Dashboard caching with invalidation when an expense changes
+- [ ] Google sign-in: check `email_verified` before linking an existing account
 - [ ] Automated tests and CI
-- [ ] Dockerfile and cloud deployment
-- [ ] Frontend
+- [ ] Dockerfile for the app, worker and beat, then cloud deployment
+
+**Frontend** (React with JavaScript for now, to be rebuilt in TypeScript later)
+
+- [x] Vite, MUI and React Router setup
+- [x] API layer (`apiFetch` and one file per backend router)
+- [x] Auth context and protected routes
+- [x] Register, login, Google sign-in, logout
+- [x] Navbar
+- [x] Expenses: list, category filter, add, edit, delete, CSV export
+- [ ] Forgot password and reset password pages
+- [ ] Specific error messages on register (read the backend `detail`)
+- [ ] Auto logout when any API call returns 401
+- [ ] Dashboard, budgets, recurring expenses, category management, account page
+- [ ] Receipt upload (after the backend importer)
+- [ ] Styling and polish pass
 
 ---
 
