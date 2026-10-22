@@ -44,6 +44,12 @@ function Navbar() {
             <Button color="inherit" component={Link} to="/expenses">
               Expenses
             </Button>
+            <Button color="inherit" component={Link} to="/dashboard">
+              Dashboard
+            </Button>
+            <Button color="inherit" component={Link} to="/recurring">
+              Recurring
+            </Button>
           </Box>
         ) : (
           <Box>

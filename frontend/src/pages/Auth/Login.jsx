@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { login } from "../../api/auth";
-import { data, useNavigate } from "react-router-dom";
+import { data, useNavigate, Link } from "react-router-dom";
 import { Box, Button, TextField, Typography } from "@mui/material";
 import { useAuth } from "../../contexts/AuthContext";
 
@@ -58,6 +58,9 @@ function Login() {
       </Button>
       <Button variant="outlined" onClick={handleGoogleLogin}>
         Login with Google
+      </Button>
+      <Button component={Link} to="/forgot-password">
+        Forgot password?
       </Button>
     </Box>
   );
