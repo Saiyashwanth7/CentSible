@@ -472,7 +472,7 @@ Automated tests are still on the roadmap.
 - [x] Register, login, Google sign-in, logout
 - [x] Navbar
 - [x] Expenses: list, category filter, add, edit, delete, CSV export
-- [ ] Forgot password and reset password pages
+- [x] Forgot password and reset password pages
 - [ ] Specific error messages on register (read the backend `detail`)
 - [ ] Auto logout when any API call returns 401
 - [ ] Dashboard, budgets, recurring expenses, category management, account page
