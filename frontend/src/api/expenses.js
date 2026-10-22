@@ -83,3 +83,7 @@ export async function exportCSV(categoryId) {
 
   window.URL.revokeObjectURL(downloadUrl);
 }
+
+export function getDashboard() {
+  return apiFetch("/expense/dashboard");
+}
