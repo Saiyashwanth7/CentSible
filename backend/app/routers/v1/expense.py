@@ -1,6 +1,5 @@
 from fastapi import APIRouter, status, Response
 from app.routers.dependencies import CurrentUser, SessionDep, PaginationDep, FiltersDep
-
 from app.services import expense_services
 from app.schema.expense import (
     DashboardStats,
@@ -33,7 +32,7 @@ async def get_expense(
 
 
 # create
-@router.post("", response_model=ExpenseResponse)
+@router.post("", response_model=ExpenseResponse, status_code=status.HTTP_201_CREATED)
 async def create_expense(data: ExpenseCreate, user: CurrentUser, session: SessionDep):
     return await expense_services.create_expense(data, user.id, session)
 
