@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Response, Cookie, status
+from fastapi import APIRouter, Depends, HTTPException, Response, Cookie, status, Request
 from fastapi.security import OAuth2PasswordRequestForm
 from uuid import uuid4
 
@@ -18,6 +18,7 @@ from app.auth.jwt import (
     delete_tokens,
     is_token_issued_before_password_update,
 )
+from app.services.rate_limit_services import check_rate_limit, reset_rate_limit
 from app.auth.password import verify_password
 from app.utils.logging import Logger, LogLevel
 from app.routers.dependencies import SessionDep
@@ -27,13 +28,22 @@ router = APIRouter()
 
 @router.post("/login", response_model=UserResponse, status_code=status.HTTP_200_OK)
 async def login(
+    request: Request,
     response: Response,
     session: SessionDep,
     form_data: OAuth2PasswordRequestForm = Depends(),
 ):
     email = form_data.username.strip().lower()
     password = form_data.password
-
+    ip = request.client.host
+    ip_key = f"rate:login:ip:{ip}"
+    email_key = f"rate:login:email:{email}"
+    ip_ok = await check_rate_limit(ip_key, 20, 60)
+    email_ok = await check_rate_limit(email_key, 5, 900)
+    if not ip_ok or not email_ok:
+        raise HTTPException(
+            status_code=429, detail="Too many login attempts, please try again later"
+        )
     # step 1: extract the user details
     try:
         user = await get_user_by_email(email, session)
@@ -44,7 +54,8 @@ async def login(
             LogLevel.ERROR, f"A user entered an email {email} which deosn't exists"
         )
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid user email"
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password.",
         )
 
     # step 3: verify the password with the hashed password. This is not the google auth, becuase google auth doesn't need a password, so, in the normal login, the hashed password must never be empty.
@@ -59,6 +70,8 @@ async def login(
             detail="Incorrect username or password.",
         )
 
+    await reset_rate_limit(email_key)
+    await reset_rate_limit(ip_key)
     # create access token and refresh token
     access_token = create_access_token({"sub": str(user.id)})
     refresh_token = create_refresh_token({"sub": str(user.id), "jti": str(uuid4())})
