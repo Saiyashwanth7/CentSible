@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { login } from "../../api/auth";
-import { data, useNavigate, Link } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { Box, Button, TextField, Typography } from "@mui/material";
 import { useAuth } from "../../contexts/AuthContext";
 
@@ -17,8 +17,11 @@ function Login() {
       setUser(data);
       navigate("/");
     } catch (err) {
-      console.log(err);
-      setError("Email or Password is incorrect");
+      if (err.status === 429) {
+        setError("Too many attempts, please try again later");
+      } else {
+        setError("Email or Password is incorrect");
+      }
     }
   }
 

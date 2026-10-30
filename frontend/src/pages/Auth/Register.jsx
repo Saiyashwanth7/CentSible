@@ -17,7 +17,11 @@ function Register() {
       await register(name, email, password, confirmPassword);
       navigate("/login");
     } catch (error) {
-      setError("Something went wrong, please check your information");
+      if (error.status === 422) {
+        setError("Please check your details and password requirements");
+      } else {
+        setError(error.message);
+      }
     }
   }
   function handleGoogleRegister() {

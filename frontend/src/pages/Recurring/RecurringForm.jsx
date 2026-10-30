@@ -24,13 +24,19 @@ function RecurringForm({ onCreated }) {
     try {
       await createRecurring(
         title,
-        amount,
+        Number(amount),
         categoryId,
         notes,
         frequency,
         startDate,
       );
       setErr("");
+      setTitle("");
+      setAmount("");
+      setCategoryId("");
+      setNotes("");
+      setFrequency("monthly");
+      setStartDate("");
       await onCreated();
     } catch (error) {
       setErr(

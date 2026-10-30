@@ -1,12 +1,18 @@
-import { getRecurringList } from "../../api/recurring";
+import {
+  getRecurringList,
+  updateRecurring,
+  deleteRecurring,
+} from "../../api/recurring";
 import { useState, useEffect } from "react";
-import { Typography, Box } from "@mui/material";
+import { Typography, Box, Button } from "@mui/material";
 import RecurringForm from "./RecurringForm";
 
 function Recurring() {
   const [loading, setLoading] = useState(true);
   const [recurring, setRecurring] = useState([]);
   const [err, setErr] = useState("");
+  const [toggleErr, setToggleErr] = useState("");
+  const [delErr, setDelErr] = useState("");
 
   async function loadRecurring() {
     try {
@@ -24,6 +30,28 @@ function Recurring() {
     loadRecurring();
   }, []);
 
+  async function handleToggle(r) {
+    try {
+      await updateRecurring(r.id, { active: !r.active });
+      await loadRecurring();
+      setToggleErr("");
+      setErr("");
+    } catch (error) {
+      setToggleErr("Something went worng, please try again later");
+    }
+  }
+
+  async function handleDelete(r) {
+    try {
+      await deleteRecurring(r.id);
+      await loadRecurring();
+      setErr("");
+      setDelErr("");
+    } catch (error) {
+      setDelErr("Couldn't delete this now, please try again later");
+    }
+  }
+
   if (loading) {
     return <p>Loading...</p>;
   }
@@ -38,11 +66,21 @@ function Recurring() {
         <Typography>No recurring expenses yet</Typography>
       )}
       <RecurringForm onCreated={loadRecurring} />
+      {toggleErr && <Typography color="error">{toggleErr}</Typography>}
+      {delErr && <Typography color="error">{delErr}</Typography>}
       {recurring.map((r) => (
-        <Typography key={r.id}>
-          {r.title} - {r.amount} - {r.frequency} - next: {r.next_date} -{" "}
-          {r.active ? "Active" : "Paused"}
-        </Typography>
+        <Box key={r.id} sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+          <Typography>
+            {r.title} - {r.amount} - {r.frequency} - next: {r.next_date} -{" "}
+            {r.active ? "Active" : "Paused"}
+          </Typography>
+          <Button onClick={() => handleToggle(r)}>
+            {r.active ? "Pause" : "Resume"}
+          </Button>
+          <Button color="error" onClick={() => handleDelete(r)}>
+            Delete
+          </Button>
+        </Box>
       ))}
     </Box>
   );

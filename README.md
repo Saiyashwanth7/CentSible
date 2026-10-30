@@ -15,7 +15,6 @@ The backend is built with **FastAPI**, **async SQLAlchemy 2.0**, **PostgreSQL**,
 - Email and password signup with bcrypt hashing and a password strength policy
 - JWT access and refresh tokens stored in `HttpOnly` cookies (not readable by JavaScript)
 - Access tokens are rejected automatically if issued before the user's last password change
-- Refresh token rotation and revocation backed by Redis (logout really logs out)
 - Password reset by email: single-use tokens, stored only as SHA-256 hashes, 15-minute expiry, identical responses whether or not the email exists
 - Sign in with Google (OAuth 2.0 / OpenID Connect). The same flow handles both first-time signup and later logins
 
@@ -59,17 +58,17 @@ The backend is built with **FastAPI**, **async SQLAlchemy 2.0**, **PostgreSQL**,
 
 ## Tech stack
 
-| Area                  | Tools                                                     |
-| --------------------- | --------------------------------------------------------- |
-| API                   | Python 3.11+, FastAPI, Pydantic v2                        |
-| Database              | PostgreSQL, SQLAlchemy 2.0 (async), Alembic               |
-| Auth                  | python-jose (JWT), passlib/bcrypt, Authlib (Google OAuth) |
-| Background jobs       | Celery (worker and beat), RabbitMQ as the broker          |
-| Cache and token store | Redis                                                     |
-| Email                 | Brevo transactional email API (template based)            |
-| File storage          | Cloudflare R2 (S3-compatible)                             |
-| Frontend              | React (JavaScript), Vite, MUI, React Router               |
-| Tooling               | Docker, Docker Compose, pytest                            |
+| Area                 | Tools                                                     |
+| -------------------- | --------------------------------------------------------- |
+| API                  | Python 3.11+, FastAPI, Pydantic v2                        |
+| Database             | PostgreSQL, SQLAlchemy 2.0 (async), Alembic               |
+| Auth                 | python-jose (JWT), passlib/bcrypt, Authlib (Google OAuth) |
+| Background jobs      | Celery (worker and beat), RabbitMQ as the broker          |
+| Rate limiting, cache | Redis (running in Docker, rate limiting in progress)      |
+| Email                | Brevo transactional email API (template based)            |
+| File storage         | Cloudflare R2 (S3-compatible)                             |
+| Frontend             | React (JavaScript), Vite, MUI, React Router               |
+| Tooling              | Docker, Docker Compose, pytest                            |
 
 ---
 
@@ -454,11 +453,11 @@ Automated tests are still on the roadmap.
 - [x] Password reset flow, end to end
 - [x] Google sign-in flow
 - [x] REST routers for all services
-- [x] Redis-backed refresh token revocation
 - [x] Scheduled Celery task for recurring expenses
 - [x] Local infrastructure with Docker Compose (PostgreSQL, Redis, RabbitMQ)
 - [ ] Receipt scanning with Cloudflare R2 and OpenRouter
-- [ ] Redis rate limiting (login, password reset, receipt upload)
+- [x] Redis rate limiting (login, password reset, receipt upload)
+<!-- - [ ] Redis-backed refresh token revocation, so logout also invalidates the refresh token -->
 - [ ] Dashboard caching with invalidation when an expense changes
 - [ ] Google sign-in: check `email_verified` before linking an existing account
 - [ ] Automated tests and CI
@@ -474,7 +473,8 @@ Automated tests are still on the roadmap.
 - [x] Expenses: list, category filter, add, edit, delete, CSV export
 - [x] Forgot password and reset password pages
 - [ ] Specific error messages on register (read the backend `detail`)
-- [ ] Auto logout when any API call returns 401
+- [x] Auto logout when any API call returns 401
+- [ ] Split the Expenses page into smaller components
 - [ ] Dashboard, budgets, recurring expenses, category management, account page
 - [ ] Receipt upload (after the backend importer)
 - [ ] Styling and polish pass
