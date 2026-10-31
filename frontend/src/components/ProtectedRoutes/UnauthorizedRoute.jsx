@@ -7,7 +7,7 @@ function UnauthorizedRoute() {
   const { user, loading } = useAuth();
 
   if (loading) return <p>Loading...</p>;
-  if (user) return <Navigate to="/" replace />;
+  if (user) return <Navigate to="/dashboard" replace />; // redirects after the unauthorized route operations
   return <Outlet />;
 }
 

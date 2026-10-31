@@ -5,7 +5,7 @@ import { Box, Typography, TextField, Button } from "@mui/material";
 
 function ForgotPassword() {
   const [email, setEmail] = useState("");
-  const [error, setError] = useState("");
+  const [err, setError] = useState("");
   const [message, setMessage] = useState("");
 
   async function handleSubmit() {
@@ -14,7 +14,7 @@ function ForgotPassword() {
       setMessage(result.message);
       setEmail("");
     } catch (error) {
-      setError("Something went wrong while generating a password reset email");
+      setError(error.message);
       setMessage("");
     }
   }
@@ -42,7 +42,7 @@ function ForgotPassword() {
       />
 
       {message && <Typography color="success.main">{message}</Typography>}
-      {error && <Typography color="error">{error}</Typography>}
+      {err && <Typography color="error">{err}</Typography>}
 
       <Button variant="contained" onClick={handleSubmit}>
         Send reset link

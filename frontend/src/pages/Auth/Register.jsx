@@ -1,8 +1,16 @@
-// Register
 import { register } from "../../api/user";
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { Box, Button, TextField, Typography } from "@mui/material";
+import { useNavigate, Link } from "react-router-dom";
+import {
+  Alert,
+  Box,
+  Button,
+  Card,
+  Divider,
+  Stack,
+  TextField,
+  Typography,
+} from "@mui/material";
 
 function Register() {
   const [name, setName] = useState("");
@@ -29,6 +37,7 @@ function Register() {
       setSubmitting(false);
     }
   }
+
   function handleGoogleRegister() {
     window.location.href = import.meta.env.VITE_API_URL + "/auth/google/";
   }
@@ -36,46 +45,79 @@ function Register() {
   return (
     <Box
       sx={{
-        maxWidth: 400,
-        mx: "auto",
-        mt: 8,
+        minHeight: "75vh",
         display: "flex",
-        flexDirection: "column",
-        gap: 2,
+        alignItems: "center",
+        justifyContent: "center",
+        px: 2,
+        py: 4,
       }}
     >
-      <Typography variant="h4">Register</Typography>
-      <TextField
-        label="Name"
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-      />
-      <TextField
-        label="Email"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-      />
-      <TextField
-        label="Password"
-        type="password"
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
-      />
-      <TextField
-        label="Confirm password"
-        type="password"
-        value={confirmPassword}
-        onChange={(e) => setConfirmPassword(e.target.value)}
-      />
+      <Card sx={{ width: "100%", maxWidth: 420, p: { xs: 3, sm: 4 } }}>
+        <Stack
+          component="form"
+          onSubmit={(e) => {
+            e.preventDefault();
+            handleSubmit();
+          }}
+          sx={{ gap: 2 }}
+        >
+          <Box sx={{ mb: 1 }}>
+            <Typography variant="h3">Create account</Typography>
+            <Typography color="text.secondary">
+              It takes a minute, and it's free.
+            </Typography>
+          </Box>
 
-      {error && <Typography color="error">{error}</Typography>}
+          <TextField
+            label="Name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+          />
+          <TextField
+            label="Email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
+          <TextField
+            label="Password"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
+          <TextField
+            label="Confirm password"
+            type="password"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+          />
 
-      <Button variant="contained" onClick={handleSubmit} disabled={submitting}>
-        {submitting ? "Registering..." : "Register"}
-      </Button>
-      <Button variant="outlined" onClick={handleGoogleRegister}>
-        Register with Google
-      </Button>
+          {error && <Alert severity="error">{error}</Alert>}
+
+          <Button
+            type="submit"
+            variant="contained"
+            size="large"
+            disabled={submitting}
+          >
+            {submitting ? "Creating account..." : "Create account"}
+          </Button>
+
+          <Divider>or</Divider>
+
+          <Button
+            variant="outlined"
+            size="large"
+            onClick={handleGoogleRegister}
+          >
+            Continue with Google
+          </Button>
+
+          <Button size="small" component={Link} to="/login">
+            Already have an account? Log in
+          </Button>
+        </Stack>
+      </Card>
     </Box>
   );
 }

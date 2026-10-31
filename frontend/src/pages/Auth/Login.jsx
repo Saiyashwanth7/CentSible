@@ -1,7 +1,16 @@
 import { useState } from "react";
 import { login } from "../../api/auth";
 import { useNavigate, Link } from "react-router-dom";
-import { Box, Button, TextField, Typography } from "@mui/material";
+import {
+  Alert,
+  Box,
+  Button,
+  Card,
+  Divider,
+  Stack,
+  TextField,
+  Typography,
+} from "@mui/material";
 import { useAuth } from "../../contexts/AuthContext";
 
 function Login() {
@@ -18,7 +27,7 @@ function Login() {
     try {
       const data = await login(email, password);
       setUser(data);
-      navigate("/");
+      navigate("/dashboard");
     } catch (err) {
       if (err.status === 429) {
         setError("Too many login attempts, please try again later");
@@ -39,39 +48,69 @@ function Login() {
   return (
     <Box
       sx={{
-        maxWidth: 400,
-        mx: "auto",
-        mt: 8,
+        minHeight: "75vh",
         display: "flex",
-        flexDirection: "column",
-        gap: 2,
+        alignItems: "center",
+        justifyContent: "center",
+        px: 2,
       }}
     >
-      <Typography variant="h4">Login</Typography>
+      <Card sx={{ width: "100%", maxWidth: 420, p: { xs: 3, sm: 4 } }}>
+        {/* form + type="submit" lets the Enter key log you in */}
+        <Stack
+          component="form"
+          onSubmit={(e) => {
+            e.preventDefault();
+            handleSubmit();
+          }}
+          sx={{ gap: 2 }}
+        >
+          <Box sx={{ mb: 1 }}>
+            <Typography variant="h3">Welcome back</Typography>
+            <Typography color="text.secondary">
+              Log in to see where your money went.
+            </Typography>
+          </Box>
 
-      <TextField
-        label="Email"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-      />
-      <TextField
-        label="Password"
-        type="password"
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
-      />
+          <TextField
+            label="Email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
+          <TextField
+            label="Password"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
 
-      {error && <Typography color="error">{error}</Typography>}
+          {error && <Alert severity="error">{error}</Alert>}
 
-      <Button variant="contained" onClick={handleSubmit} disabled={submitting}>
-        {submitting ? "Logging in..." : "Login"}
-      </Button>
-      <Button variant="outlined" onClick={handleGoogleLogin}>
-        Login with Google
-      </Button>
-      <Button component={Link} to="/forgot-password">
-        Forgot password?
-      </Button>
+          <Button
+            type="submit"
+            variant="contained"
+            size="large"
+            disabled={submitting}
+          >
+            {submitting ? "Logging in..." : "Log in"}
+          </Button>
+
+          <Divider>or</Divider>
+
+          <Button variant="outlined" size="large" onClick={handleGoogleLogin}>
+            Continue with Google
+          </Button>
+
+          <Stack direction="row" sx={{ justifyContent: "space-between" }}>
+            <Button size="small" component={Link} to="/forgot-password">
+              Forgot password?
+            </Button>
+            <Button size="small" component={Link} to="/register">
+              Create account
+            </Button>
+          </Stack>
+        </Stack>
+      </Card>
     </Box>
   );
 }

@@ -7,7 +7,26 @@ import {
   exportCSV,
 } from "../../api/expenses";
 import { getCategories } from "../../api/categories";
-import { Box, Typography, TextField, MenuItem, Button } from "@mui/material";
+import {
+  Alert,
+  Box,
+  Button,
+  Card,
+  CardContent,
+  CircularProgress,
+  Divider,
+  MenuItem,
+  Stack,
+  TextField,
+  Typography,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+} from "@mui/material";
+import { DatePicker } from "@mui/x-date-pickers/DatePicker";
+import dayjs from "dayjs";
+import Mascot from "../../components/Mascot/Mascot";
 
 function Expenses() {
   const [loading, setLoading] = useState(true);
@@ -24,6 +43,7 @@ function Expenses() {
   const [delErr, setDelErr] = useState("");
   const [editingId, setEditingId] = useState(null);
   const [exportErr, setExportErr] = useState("");
+  const [formOpen, setFormOpen] = useState(false);
   // These below useEffect functions get triggered by the react app instead of any interactive UI tools
   useEffect(() => {
     getExpenses(1, 20, categoryId)
@@ -40,6 +60,8 @@ function Expenses() {
 
   // to reset the expense form after creating the expense or cancelling the update
   function resetForm() {
+    setFormOpen(false); // add this line
+    setEditingId(null);
     setEditingId(null);
     setTitle("");
     setAmount("");
@@ -75,6 +97,7 @@ function Expenses() {
 
   // This just sets the form with the expense details of exp.id, doesn't let users submit or do anything
   function handleEdit(exp) {
+    setFormOpen(true); // add this line
     setEditingId(exp.id);
     setTitle(exp.title);
     setAmount(exp.amount);
@@ -107,104 +130,202 @@ function Expenses() {
   }
 
   // to deal with the request and response time
-  if (loading) return <Typography>Loading...</Typography>;
+  if (loading) {
+    return (
+      <Box sx={{ display: "flex", justifyContent: "center", mt: 8 }}>
+        <CircularProgress />
+      </Box>
+    );
+  }
 
   return (
-    <Box sx={{ maxWidth: 600, mx: "auto", mt: 4 }}>
-      <Typography variant="h4" sx={{ mb: 2 }}>
+    <Box sx={{ maxWidth: 760, mx: "auto", mt: 4, px: 2, pb: 6 }}>
+      <Typography variant="h3" sx={{ mb: 1 }}>
         Expenses
       </Typography>
-
-      <TextField
-        select
-        label="Category"
-        value={categoryId}
-        onChange={(e) => setCategoryId(e.target.value)}
-        sx={{ mb: 2, minWidth: 200 }}
-      >
-        {categories.map((c) => (
-          <MenuItem key={c.id} value={c.id}>
-            {c.name}
-          </MenuItem>
-        ))}
-        <MenuItem value="">All categories</MenuItem>
-      </TextField>
-
-      {err && <Typography color="error">{err}</Typography>}
-
-      <Button variant="outlined" onClick={handleExport} sx={{ ml: 2, mt: 1 }}>
-        Export CSV
-      </Button>
-      {exportErr && <Typography color="error">{exportErr}</Typography>}
-      <Box sx={{ display: "flex", flexDirection: "column", gap: 2, mb: 4 }}>
-        <Typography variant="h6">
-          {editingId ? "Edit expense" : "Add expense"}
-        </Typography>
-
-        <TextField
-          label="Title"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
+      <Box sx={{ mb: 3 }}>
+        <Mascot
+          mood="focused"
+          size={48}
+          message={
+            editingId ? "Editing, careful now." : "Log it before you forget!"
+          }
         />
-        <TextField
-          label="Amount"
-          type="number"
-          value={amount}
-          onChange={(e) => setAmount(e.target.value)}
-        />
-        <TextField
-          select
-          label="Category"
-          value={formCategoryId}
-          onChange={(e) => setFormCategoryId(e.target.value)}
-        >
-          {categories.map((c) => (
-            <MenuItem key={c.id} value={c.id}>
-              {c.name}
-            </MenuItem>
-          ))}
-        </TextField>
-        <TextField
-          label="Date"
-          type="date"
-          value={date}
-          onChange={(e) => setDate(e.target.value)}
-          slotProps={{ inputLabel: { shrink: true } }}
-        />
-        <TextField
-          label="Notes"
-          value={notes}
-          onChange={(e) => setNotes(e.target.value)}
-        />
-
-        {formErr && <Typography color="error">{formErr}</Typography>}
-
-        <Button variant="contained" onClick={handleSubmit}>
-          {editingId ? "Update" : "Add"}
-        </Button>
-        {editingId && <Button onClick={resetForm}>Cancel</Button>}
       </Box>
 
-      {delErr && <Typography color="error">{delErr}</Typography>}
+      <Button variant="outlined" onClick={handleExport}>
+        Export CSV
+      </Button>
+      <Button variant="contained" onClick={() => setFormOpen(true)}>
+        Add expense
+      </Button>
 
-      {!err && expenses.length === 0 && (
-        <Typography>No expenses yet</Typography>
+      {/* List header: title on the left, filter + export on the right */}
+      <Box
+        sx={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          flexWrap: "wrap",
+          gap: 2,
+          mb: 2,
+        }}
+      >
+        <Typography variant="h5">Your expenses</Typography>
+        <Stack direction="row" sx={{ gap: 1, alignItems: "center" }}>
+          <TextField
+            select
+            size="small"
+            label="Category"
+            value={categoryId}
+            onChange={(e) => setCategoryId(e.target.value)}
+            sx={{ minWidth: 160 }}
+          >
+            <MenuItem value="">All categories</MenuItem>
+            {categories.map((c) => (
+              <MenuItem key={c.id} value={c.id}>
+                {c.name}
+              </MenuItem>
+            ))}
+          </TextField>
+          <Button variant="outlined" onClick={handleExport}>
+            Export CSV
+          </Button>
+        </Stack>
+        <Dialog open={formOpen} onClose={resetForm} fullWidth maxWidth="sm">
+          <DialogTitle>
+            {editingId ? "Edit expense" : "Add expense"}
+          </DialogTitle>
+          <DialogContent>
+            <Box
+              sx={{ display: "flex", flexDirection: "column", gap: 2, mt: 1 }}
+            >
+              <TextField
+                label="Title"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+              />
+              <Box
+                sx={{
+                  display: "grid",
+                  gap: 2,
+                  gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" },
+                }}
+              >
+                <TextField
+                  label="Amount"
+                  type="number"
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                />
+                <TextField
+                  select
+                  label="Category"
+                  value={formCategoryId}
+                  onChange={(e) => setFormCategoryId(e.target.value)}
+                >
+                  {categories.map((c) => (
+                    <MenuItem key={c.id} value={c.id}>
+                      {c.name}
+                    </MenuItem>
+                  ))}
+                </TextField>
+                <DatePicker
+                  label="Date"
+                  value={date ? dayjs(date) : null}
+                  onChange={(v) =>
+                    setDate(v && v.isValid() ? v.format("YYYY-MM-DD") : "")
+                  }
+                  format="DD/MM/YYYY"
+                  slotProps={{ textField: { fullWidth: true } }}
+                />
+                <TextField
+                  label="Notes"
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                />
+              </Box>
+              {formErr && <Alert severity="error">{formErr}</Alert>}
+            </Box>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={resetForm}>Cancel</Button>
+            <Button variant="contained" onClick={handleSubmit}>
+              {editingId ? "Update" : "Add expense"}
+            </Button>
+          </DialogActions>
+        </Dialog>
+      </Box>
+
+      {err && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {err}
+        </Alert>
+      )}
+      {exportErr && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {exportErr}
+        </Alert>
+      )}
+      {delErr && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {delErr}
+        </Alert>
       )}
 
-      {expenses.map((exp) => (
-        <Box
-          key={exp.id}
-          sx={{ display: "flex", alignItems: "center", gap: 2 }}
-        >
-          <Typography>
-            {exp.date} - {exp.title} - {exp.amount}
-          </Typography>
-          <Button color="error" onClick={() => handleDelete(exp.id)}>
-            Delete
-          </Button>
-          <Button onClick={() => handleEdit(exp)}>Edit</Button>
-        </Box>
-      ))}
+      {!err && expenses.length === 0 && (
+        <Card>
+          <CardContent sx={{ textAlign: "center", py: 5 }}>
+            <Typography sx={{ fontSize: 48, lineHeight: 1 }}>😴</Typography>
+            <Typography sx={{ mt: 1 }}>No expenses yet.</Typography>
+            <Typography variant="body2" color="text.secondary">
+              Add your first one above.
+            </Typography>
+          </CardContent>
+        </Card>
+      )}
+
+      {expenses.length > 0 && (
+        <Card>
+          {expenses.map((exp, i) => (
+            <Box key={exp.id}>
+              {i > 0 && <Divider />}
+              <Box
+                sx={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 2,
+                  px: 3,
+                  py: 2,
+                }}
+              >
+                <Box sx={{ flex: 1, minWidth: 0 }}>
+                  <Typography sx={{ fontWeight: 600 }} noWrap>
+                    {exp.title}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" noWrap>
+                    {exp.date}
+                    {exp.category?.name ? " · " + exp.category.name : ""}
+                  </Typography>
+                </Box>
+                <Typography sx={{ fontWeight: 700 }}>
+                  {"₹" + Number(exp.amount).toLocaleString("en-IN")}
+                </Typography>
+                <Button size="small" onClick={() => handleEdit(exp)}>
+                  Edit
+                </Button>
+                <Button
+                  size="small"
+                  color="error"
+                  onClick={() => handleDelete(exp.id)}
+                >
+                  Delete
+                </Button>
+              </Box>
+            </Box>
+          ))}
+        </Card>
+      )}
     </Box>
   );
 }
