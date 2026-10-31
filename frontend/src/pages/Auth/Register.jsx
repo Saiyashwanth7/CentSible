@@ -11,17 +11,22 @@ function Register() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const navigate = useNavigate();
   const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
   async function handleSubmit() {
+    setError("");
+    setSubmitting(true);
     try {
       await register(name, email, password, confirmPassword);
       navigate("/login");
-    } catch (error) {
-      if (error.status === 422) {
-        setError("Please check your details and password requirements");
+    } catch (err) {
+      if (err.status === 422 || err.status === 409) {
+        setError(err.message);
       } else {
-        setError(error.message);
+        setError("Something went wrong, please try again later");
       }
+    } finally {
+      setSubmitting(false);
     }
   }
   function handleGoogleRegister() {
@@ -65,8 +70,8 @@ function Register() {
 
       {error && <Typography color="error">{error}</Typography>}
 
-      <Button variant="contained" onClick={handleSubmit}>
-        Register
+      <Button variant="contained" onClick={handleSubmit} disabled={submitting}>
+        {submitting ? "Registering..." : "Register"}
       </Button>
       <Button variant="outlined" onClick={handleGoogleRegister}>
         Register with Google

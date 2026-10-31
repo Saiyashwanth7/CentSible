@@ -10,18 +10,25 @@ function Login() {
   const navigate = useNavigate();
   const [error, setError] = useState("");
   const { setUser } = useAuth();
+  const [submitting, setSubmitting] = useState(false);
 
   async function handleSubmit() {
+    setError("");
+    setSubmitting(true);
     try {
       const data = await login(email, password);
       setUser(data);
       navigate("/");
     } catch (err) {
       if (err.status === 429) {
-        setError("Too many attempts, please try again later");
+        setError("Too many login attempts, please try again later");
+      } else if (err.status === 401) {
+        setError("Incorrect username or password.");
       } else {
-        setError("Email or Password is incorrect");
+        setError("Something went wrong, please try again later");
       }
+    } finally {
+      setSubmitting(false);
     }
   }
 
@@ -56,8 +63,8 @@ function Login() {
 
       {error && <Typography color="error">{error}</Typography>}
 
-      <Button variant="contained" onClick={handleSubmit}>
-        Login
+      <Button variant="contained" onClick={handleSubmit} disabled={submitting}>
+        {submitting ? "Logging in..." : "Login"}
       </Button>
       <Button variant="outlined" onClick={handleGoogleLogin}>
         Login with Google

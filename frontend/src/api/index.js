@@ -42,8 +42,12 @@ export async function apiFetch(path, options = {}) {
   if (!res.ok) {
     const body = await res.json().catch(() => null);
     const detail = body?.detail;
-    const message =
-      typeof detail === "string" ? detail : "Request failed: " + res.status;
+    let message = "Request failed: " + res.status;
+    if (typeof detail === "string") {
+      message = detail;
+    } else if (Array.isArray(detail) && detail.length > 0) {
+      message = detail.map((d) => d.msg).join(". ");
+    }
 
     const error = new Error(message);
     error.status = res.status;
