@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from app.services.password_reset_token_services import *
 from app.exceptions.password_reset_token import (
     PasswordResetTokenDoesNotExist,
@@ -28,6 +28,7 @@ from app.services.password_reset_token_services import (
     PasswordResetTokenService,
     get_password_reset_token_service,
 )
+from app.services.rate_limit_services import check_rate_limit, reset_rate_limit
 from app.routers.dependencies import SessionDep
 
 router = APIRouter()
@@ -47,6 +48,7 @@ INVALID_TOKEN_MESSAGE = "This password reset link is invalid or has expired."
     status_code=status.HTTP_202_ACCEPTED,
 )
 async def request_password_reset(
+    request: Request,
     forgot_request: ForgotPasswordRequest,
     session: SessionDep,
     password_reset_token_service: PasswordResetTokenService = Depends(
@@ -54,6 +56,16 @@ async def request_password_reset(
     ),
 ):
     email = forgot_request.email
+    ip = request.client.host
+    ip_key = f"rate:reset:ip:{ip}"
+    email_key = f"rate:reset:email:{email.lower()}"
+    ip_ok = await check_rate_limit(ip_key, 10, 900)
+    email_ok = await check_rate_limit(email_key, 3, 3600)
+    if not ip_ok or not email_ok:
+        raise HTTPException(
+            status_code=429,
+            detail="Too many password reset requests, please try again later",
+        )
     try:
         user = await get_user_by_email(email, session)
     except UserEmailDoesNotExist:
