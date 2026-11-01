@@ -71,7 +71,7 @@ async def login(
         )
 
     await reset_rate_limit(email_key)
-    await reset_rate_limit(ip_key)
+
     # create access token and refresh token
     access_token = create_access_token({"sub": str(user.id)})
     refresh_token = create_refresh_token({"sub": str(user.id), "jti": str(uuid4())})

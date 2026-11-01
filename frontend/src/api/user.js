@@ -4,14 +4,18 @@ export function getCurrentUser() {
   return apiFetch("/user/current");
 }
 
-export async function updateProfile(name) {
-  // TODO: PATCH /users/me  { name }  -> returns the updated user
+export function updateProfile(name) {
+  return apiFetch("/user/update", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name }),
+  });
 }
 export async function changePassword(currentPassword, newPassword) {
   // TODO: POST /users/me/password  { current_password, new_password }
 }
 export async function deleteAccount() {
-  // TODO: DELETE /users/me
+  return apiFetch("/user/delete", { method: "DELETE" });
 }
 
 // register

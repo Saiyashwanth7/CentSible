@@ -6,250 +6,19 @@ import {
   Box,
   Button,
   Card,
-  CardContent,
   Dialog,
   DialogActions,
   DialogContent,
   DialogContentText,
   DialogTitle,
+  Divider,
   Stack,
-  Tab,
-  Tabs,
   TextField,
   Typography,
-  Divider,
 } from "@mui/material";
 import { useAuth } from "../../contexts/AuthContext";
-import { exportCSV } from "../../api/expenses";
-import { updateProfile, changePassword, deleteAccount } from "../../api/user";
+import { updateProfile, deleteAccount } from "../../api/user";
 import Mascot from "../../components/Mascot/Mascot";
-
-// Small wrapper so every tab has the same title + card look
-function Section({ title, text, children }) {
-  return (
-    <Card>
-      <CardContent sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-        <Box>
-          <Typography variant="h5">{title}</Typography>
-          {text && (
-            <Typography variant="body2" color="text.secondary">
-              {text}
-            </Typography>
-          )}
-        </Box>
-        {children}
-      </CardContent>
-    </Card>
-  );
-}
-
-// status = { type: "success" | "error", text: "..." } or null
-function Status({ status }) {
-  if (!status) return null;
-  return <Alert severity={status.type}>{status.text}</Alert>;
-}
-
-function ProfileTab({ user, setUser }) {
-  const [name, setName] = useState(user?.name || "");
-  const [saving, setSaving] = useState(false);
-  const [status, setStatus] = useState(null);
-
-  async function handleSave() {
-    if (!name.trim()) {
-      setStatus({ type: "error", text: "Name can't be empty" });
-      return;
-    }
-    setSaving(true);
-    setStatus(null);
-    try {
-      const updated = await updateProfile(name.trim());
-      setUser(updated);
-      setStatus({ type: "success", text: "Profile updated" });
-    } catch {
-      setStatus({ type: "error", text: "Could not update profile" });
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <Section title="Profile" text="This is how you appear in CentSible.">
-      <TextField
-        label="Name"
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-      />
-      <TextField
-        label="Email"
-        value={user?.email || ""}
-        disabled
-        helperText="Email can't be changed"
-      />
-      <Status status={status} />
-      <Box>
-        <Button variant="contained" onClick={handleSave} disabled={saving}>
-          {saving ? "Saving..." : "Save changes"}
-        </Button>
-      </Box>
-    </Section>
-  );
-}
-
-function SecurityTab() {
-  const [current, setCurrent] = useState("");
-  const [next, setNext] = useState("");
-  const [confirm, setConfirm] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [status, setStatus] = useState(null);
-
-  async function handleSubmit() {
-    if (next.length < 8) {
-      setStatus({
-        type: "error",
-        text: "New password must be at least 8 characters",
-      });
-      return;
-    }
-    if (next !== confirm) {
-      setStatus({ type: "error", text: "Passwords do not match" });
-      return;
-    }
-    setSaving(true);
-    setStatus(null);
-    try {
-      await changePassword(current, next);
-      setCurrent("");
-      setNext("");
-      setConfirm("");
-      setStatus({ type: "success", text: "Password changed" });
-    } catch (err) {
-      setStatus({
-        type: "error",
-        text:
-          err.status === 401
-            ? "Current password is incorrect"
-            : "Could not change password",
-      });
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <Section title="Password" text="Use at least 8 characters.">
-      <TextField
-        label="Current password"
-        type="password"
-        value={current}
-        onChange={(e) => setCurrent(e.target.value)}
-      />
-      <TextField
-        label="New password"
-        type="password"
-        value={next}
-        onChange={(e) => setNext(e.target.value)}
-      />
-      <TextField
-        label="Confirm new password"
-        type="password"
-        value={confirm}
-        onChange={(e) => setConfirm(e.target.value)}
-      />
-      <Status status={status} />
-      <Box>
-        <Button variant="contained" onClick={handleSubmit} disabled={saving}>
-          {saving ? "Updating..." : "Update password"}
-        </Button>
-      </Box>
-    </Section>
-  );
-}
-
-function DataTab() {
-  const [status, setStatus] = useState(null);
-
-  async function handleExport() {
-    try {
-      await exportCSV(""); // empty string = all categories
-      setStatus({ type: "success", text: "Export started" });
-    } catch {
-      setStatus({
-        type: "error",
-        text: "Could not export, please try again later",
-      });
-    }
-  }
-
-  return (
-    <Section title="Your data" text="Download all your expenses as a CSV file.">
-      <Status status={status} />
-      <Box>
-        <Button variant="outlined" onClick={handleExport}>
-          Export all expenses
-        </Button>
-      </Box>
-    </Section>
-  );
-}
-
-function DangerTab({ onDeleted }) {
-  const [open, setOpen] = useState(false);
-  const [typed, setTyped] = useState("");
-  const [deleting, setDeleting] = useState(false);
-  const [status, setStatus] = useState(null);
-
-  async function handleDelete() {
-    setDeleting(true);
-    try {
-      await deleteAccount();
-      onDeleted();
-    } catch {
-      setStatus({ type: "error", text: "Could not delete account" });
-      setOpen(false);
-    } finally {
-      setDeleting(false);
-    }
-  }
-
-  return (
-    <Section
-      title="Delete account"
-      text="This permanently removes your account and all your expenses. It can't be undone."
-    >
-      <Status status={status} />
-      <Box>
-        <Button variant="outlined" color="error" onClick={() => setOpen(true)}>
-          Delete my account
-        </Button>
-      </Box>
-
-      <Dialog open={open} onClose={() => setOpen(false)}>
-        <DialogTitle>Delete your account?</DialogTitle>
-        <DialogContent>
-          <DialogContentText sx={{ mb: 2 }}>
-            Type DELETE to confirm.
-          </DialogContentText>
-          <TextField
-            fullWidth
-            value={typed}
-            onChange={(e) => setTyped(e.target.value)}
-          />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setOpen(false)}>Cancel</Button>
-          <Button
-            color="error"
-            variant="contained"
-            disabled={typed !== "DELETE" || deleting}
-            onClick={handleDelete}
-          >
-            {deleting ? "Deleting..." : "Delete forever"}
-          </Button>
-        </DialogActions>
-      </Dialog>
-    </Section>
-  );
-}
 
 function SettingRow({ label, value, action, danger, onClick }) {
   return (
@@ -281,17 +50,113 @@ function SettingRow({ label, value, action, danger, onClick }) {
   );
 }
 
-function Account() {
-  const { user, setUser, logout } = useAuth();
-  const navigate = useNavigate();
-  const [tab, setTab] = useState("profile");
+function EditNameDialog({ onClose, user, setUser }) {
+  const [name, setName] = useState(user?.name || "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
 
-  const name = user?.name || "friend";
-
-  async function handleLogout() {
-    await logout();
-    navigate("/");
+  async function handleSave() {
+    if (!name.trim()) {
+      setError("Name can't be empty");
+      return;
+    }
+    setSaving(true);
+    setError("");
+    try {
+      const updated = await updateProfile(name.trim());
+      setUser(updated);
+      onClose();
+    } catch (err) {
+      console.error("update failed:", err);
+      setError("Could not update your name, please try again");
+      setSaving(false);
+    }
   }
+
+  return (
+    <Dialog open onClose={onClose} fullWidth maxWidth="xs">
+      <DialogTitle>Edit name</DialogTitle>
+      <DialogContent>
+        <Box sx={{ display: "flex", flexDirection: "column", gap: 2, mt: 1 }}>
+          <TextField
+            autoFocus
+            fullWidth
+            label="Name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+          />
+          {error && <Alert severity="error">{error}</Alert>}
+        </Box>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>Cancel</Button>
+        <Button variant="contained" onClick={handleSave} disabled={saving}>
+          {saving ? "Saving..." : "Save"}
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
+function DeleteAccountDialog({ onClose, onDeleted }) {
+  const [typed, setTyped] = useState("");
+  const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handleDelete() {
+    setDeleting(true);
+    setError("");
+    try {
+      await deleteAccount();
+      onDeleted();
+    } catch (err) {
+      console.error("delete failed:", err);
+      setError("Could not delete your account, please try again");
+      setDeleting(false);
+    }
+  }
+
+  return (
+    <Dialog open onClose={onClose} fullWidth maxWidth="xs">
+      <DialogTitle>Delete your account?</DialogTitle>
+      <DialogContent>
+        <DialogContentText sx={{ mb: 2 }}>
+          This permanently deletes your account, expenses, budgets and recurring
+          expenses. It can't be undone. Type DELETE to confirm.
+        </DialogContentText>
+        <TextField
+          autoFocus
+          fullWidth
+          value={typed}
+          onChange={(e) => setTyped(e.target.value)}
+        />
+        {error && (
+          <Alert severity="error" sx={{ mt: 2 }}>
+            {error}
+          </Alert>
+        )}
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>Cancel</Button>
+        <Button
+          color="error"
+          variant="contained"
+          disabled={typed !== "DELETE" || deleting}
+          onClick={handleDelete}
+        >
+          {deleting ? "Deleting..." : "Delete forever"}
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
+function Account() {
+  const { user, setUser } = useAuth();
+  const [editOpen, setEditOpen] = useState(false);
+  const navigate = useNavigate();
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const name = user?.name || "friend";
 
   return (
     <Box sx={{ maxWidth: 900, mx: "auto", mt: 5, px: 2 }}>
@@ -344,7 +209,12 @@ function Account() {
         {/* Right: settings as rows */}
         <Stack sx={{ gap: 3 }}>
           <Card>
-            <SettingRow label="Name" value={name} action="Edit" />
+            <SettingRow
+              label="Name"
+              value={name}
+              action="Edit"
+              onClick={() => setEditOpen(true)}
+            />
             <Divider />
             <SettingRow label="Email" value={user?.email} />
             <Divider />
@@ -363,10 +233,29 @@ function Account() {
               value="Permanently removes your account and expenses"
               action="Delete"
               danger
+              onClick={() => setDeleteOpen(true)}
             />
           </Card>
         </Stack>
       </Box>
+
+      {/* Only rendered while open, so it starts with fresh state every time */}
+      {editOpen && (
+        <EditNameDialog
+          onClose={() => setEditOpen(false)}
+          user={user}
+          setUser={setUser}
+        />
+      )}
+      {deleteOpen && (
+        <DeleteAccountDialog
+          onClose={() => setDeleteOpen(false)}
+          onDeleted={() => {
+            setUser(null);
+            navigate("/");
+          }}
+        />
+      )}
     </Box>
   );
 }

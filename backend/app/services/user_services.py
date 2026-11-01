@@ -10,7 +10,7 @@ from app.exceptions.user import (
     UserGoogleIdDoesNotExist,
 )
 from app.models.users import User
-from app.schema.user import UserCreate
+from app.schema.user import UserCreate, UserPatch
 from app.auth.password import hash_password
 from app.utils.logging import Logger, LogLevel
 from app.services.category_services import seed_default_categories
@@ -105,3 +105,18 @@ async def update_user_password(
     session.add(user)
     await session.flush()
     return user
+
+
+async def patch_user_name(id: int, user: UserPatch, session: AsyncSession) -> User:
+    current_user = await get_user_by_id(id, session)
+    current_user.name = user.name
+    session.add(current_user)
+    await session.flush()
+    return await get_user_by_id(id, session)
+
+
+async def delete_user(id: int, session: AsyncSession) -> None:
+    user = await get_user_by_id(id, session)
+    await session.delete(user)
+    await session.flush()
+    return

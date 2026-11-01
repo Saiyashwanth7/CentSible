@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, field_validator, ValidationInfo
+from pydantic import BaseModel, EmailStr, field_validator, ValidationInfo, Field
 from pydantic_core import PydanticCustomError
 import re
 
@@ -84,3 +84,7 @@ class UserCreate(BaseModel):
             raise PydanticCustomError("password_mismatch", "Passwords do not match")
 
         return value
+
+
+class UserPatch(BaseModel):
+    name: str = Field(min_length=1, max_length=50)

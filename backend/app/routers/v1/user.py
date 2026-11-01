@@ -1,8 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Response
 from app.services.user_services import *
 from app.exceptions.user import UserAlreadyExists
-from app.schema.user import UserResponse, UserCreate
+from app.schema.user import UserResponse, UserCreate, UserPatch
 import app.services.user_services as user_services
+from app.auth.jwt import delete_tokens
 from app.models.users import User
 from app.routers.dependencies import CurrentUser, SessionDep
 from app.celery.tasks.email_tasks import task_send_welcome_email
@@ -37,3 +38,26 @@ async def register(user_create: UserCreate, session: SessionDep):
         )
 
     return user
+
+
+@router.patch("/update", response_model=UserResponse)
+async def update_user(
+    user_model: UserPatch, current_user: CurrentUser, session: SessionDep
+):
+    try:
+        user = await user_services.get_user_by_id(current_user.id, session)
+    except UserIdDoesNotExist as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    return await user_services.patch_user_name(current_user.id, user_model, session)
+
+
+@router.delete("/delete", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_user(
+    response: Response, current_user: CurrentUser, session: SessionDep
+):
+    try:
+        await user_services.delete_user(current_user.id, session)
+    except UserIdDoesNotExist as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+    delete_tokens(response)  # same call as your logout route

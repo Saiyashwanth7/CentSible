@@ -13,6 +13,7 @@ import Dashboard from "./pages/Dashboard/Dashboard";
 import ForgotPassword from "./pages/ForgotPassword/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword/ResetPassword";
 import Recurring from "./pages/Recurring/Recurring";
+import Budget from "./pages/Budget/Budget";
 
 function App() {
   return (
@@ -33,6 +34,7 @@ function App() {
           <Route path="/expenses" element={<Expenses />} />
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/recurring" element={<Recurring />} />
+          <Route path="/budget" element={<Budget />} />
         </Route>
 
         <Route path="*" element={<NotFound />} />

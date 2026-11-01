@@ -62,7 +62,6 @@ function Expenses() {
   function resetForm() {
     setFormOpen(false); // add this line
     setEditingId(null);
-    setEditingId(null);
     setTitle("");
     setAmount("");
     setFormCategoryId("");
