@@ -17,7 +17,7 @@ class UserResponse(BaseModel):
     id: int
     email: EmailStr
     name: str
-
+    has_password: bool
     model_config = {"from_attributes": True}
 
 
@@ -88,3 +88,34 @@ class UserCreate(BaseModel):
 
 class UserPatch(BaseModel):
     name: str = Field(min_length=1, max_length=50)
+
+
+class UserPasswordPatch(BaseModel):
+    current_password: str
+    password: str
+    confirm_password: str
+
+    @field_validator("password")
+    def validate_password_with_current_password(cls, value: str, info: ValidationInfo):
+        current_password = info.data.get("current_password")
+        if current_password == value:
+            raise PydanticCustomError(
+                "same_as_current_password",
+                "Current password and the new password are same",
+            )
+        return value
+
+    @field_validator("password")
+    def validate_password(cls, value: str | None, info: ValidationInfo):
+        if not value:
+            raise PydanticCustomError("password_required", "Password is required")
+
+        return validate_password_strength(value)
+
+    @field_validator("confirm_password")
+    def validate_confirm_password(cls, value: str | None, info: ValidationInfo):
+        password = info.data.get("password")
+        if value != password:
+            raise PydanticCustomError("password_mismatch", "Passwords do not match")
+
+        return value

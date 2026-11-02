@@ -48,7 +48,7 @@ export function updateExpense(
   });
 }
 
-export async function exportCSV(categoryId) {
+export async function exportCSV(categoryId = "") {
   const params = new URLSearchParams();
 
   if (categoryId) {

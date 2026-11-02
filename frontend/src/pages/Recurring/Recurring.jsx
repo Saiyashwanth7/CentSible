@@ -12,11 +12,73 @@ import {
   CardContent,
   Chip,
   CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   Divider,
   Typography,
 } from "@mui/material";
 import RecurringForm from "./RecurringForm";
 import Mascot from "../../components/Mascot/Mascot";
+
+function formatMoney(value) {
+  return "₹" + Number(value || 0).toLocaleString("en-IN");
+}
+
+function capitalize(text) {
+  return text ? text.charAt(0).toUpperCase() + text.slice(1) : "";
+}
+
+// The category may come as an object ({ name }) or as plain text
+function categoryName(r) {
+  if (!r.category) return "None";
+  return typeof r.category === "string" ? r.category : r.category.name;
+}
+
+function DetailRow({ label, value }) {
+  return (
+    <Box sx={{ py: 1.5 }}>
+      <Typography variant="body2" color="text.secondary">
+        {label}
+      </Typography>
+      <Typography sx={{ overflowWrap: "anywhere" }}>{value}</Typography>
+    </Box>
+  );
+}
+
+function RecurringDetailsDialog({ item, onClose, onToggle, onDelete }) {
+  return (
+    <Dialog open onClose={onClose} fullWidth maxWidth="xs">
+      <DialogTitle>{item.title}</DialogTitle>
+      <DialogContent>
+        <Typography variant="h3" sx={{ mb: 1 }}>
+          {formatMoney(item.amount)}
+        </Typography>
+        <Divider />
+        <DetailRow label="Repeats" value={capitalize(item.frequency)} />
+        <Divider />
+        <DetailRow label="Next charge" value={item.next_date} />
+        <Divider />
+        <DetailRow label="Category" value={categoryName(item)} />
+        <Divider />
+        <DetailRow label="Status" value={item.active ? "Active" : "Paused"} />
+        <Divider />
+        <DetailRow label="Notes" value={item.notes || "No notes"} />
+      </DialogContent>
+      <DialogActions>
+        <Button color="error" onClick={onDelete}>
+          Delete
+        </Button>
+        <Box sx={{ flex: 1 }} />
+        <Button onClick={onClose}>Close</Button>
+        <Button variant="contained" onClick={onToggle}>
+          {item.active ? "Pause" : "Resume"}
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
 
 function Recurring() {
   const [loading, setLoading] = useState(true);
@@ -25,6 +87,8 @@ function Recurring() {
   const [toggleErr, setToggleErr] = useState("");
   const [delErr, setDelErr] = useState("");
   const [formOpen, setFormOpen] = useState(false);
+  const [selected, setSelected] = useState(null); // item shown in the details dialog
+
   async function loadRecurring() {
     try {
       const data = await getRecurringList();
@@ -48,7 +112,7 @@ function Recurring() {
       setToggleErr("");
       setErr("");
     } catch (error) {
-      setToggleErr("Something went worng, please try again later");
+      setToggleErr("Something went wrong, please try again later");
     }
   }
 
@@ -61,10 +125,6 @@ function Recurring() {
     } catch (error) {
       setDelErr("Couldn't delete this now, please try again later");
     }
-  }
-
-  if (loading) {
-    return <p>Loading...</p>;
   }
 
   if (loading) {
@@ -136,6 +196,7 @@ function Recurring() {
             <Box key={r.id}>
               {i > 0 && <Divider />}
               <Box
+                onClick={() => setSelected(r)}
                 sx={{
                   display: "flex",
                   alignItems: "center",
@@ -143,6 +204,8 @@ function Recurring() {
                   px: 3,
                   py: 2,
                   flexWrap: "wrap",
+                  cursor: "pointer",
+                  "&:hover": { bgcolor: "action.hover" },
                 }}
               >
                 <Box sx={{ flex: 1, minWidth: 160 }}>
@@ -152,7 +215,7 @@ function Recurring() {
                   </Typography>
                 </Box>
                 <Typography sx={{ fontWeight: 700 }}>
-                  {"₹" + Number(r.amount).toLocaleString("en-IN")}
+                  {formatMoney(r.amount)}
                 </Typography>
                 <Chip
                   size="small"
@@ -160,13 +223,22 @@ function Recurring() {
                   color={r.active ? "primary" : "default"}
                   variant={r.active ? "filled" : "outlined"}
                 />
-                <Button size="small" onClick={() => handleToggle(r)}>
+                <Button
+                  size="small"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleToggle(r);
+                  }}
+                >
                   {r.active ? "Pause" : "Resume"}
                 </Button>
                 <Button
                   size="small"
                   color="error"
-                  onClick={() => handleDelete(r)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDelete(r);
+                  }}
                 >
                   Delete
                 </Button>
@@ -181,6 +253,22 @@ function Recurring() {
         onClose={() => setFormOpen(false)}
         onCreated={loadRecurring}
       />
+
+      {/* Details dialog, only rendered while an item is selected */}
+      {selected && (
+        <RecurringDetailsDialog
+          item={selected}
+          onClose={() => setSelected(null)}
+          onToggle={() => {
+            handleToggle(selected);
+            setSelected(null);
+          }}
+          onDelete={() => {
+            handleDelete(selected);
+            setSelected(null);
+          }}
+        />
+      )}
     </Box>
   );
 }

@@ -1,17 +1,48 @@
 import { useEffect, useState } from "react";
 import { useLocation, Link } from "react-router-dom";
 import { confirmPasswordReset, validateResetToken } from "../../api/auth";
-import { Box, Typography, TextField, MenuItem, Button } from "@mui/material";
+import {
+  Alert,
+  Box,
+  Button,
+  Card,
+  Stack,
+  TextField,
+  Typography,
+} from "@mui/material";
+import Mascot from "../../components/Mascot/Mascot";
+
+// Same centered card for every state of this page
+function Shell({ mood, message, children }) {
+  return (
+    <Box
+      sx={{
+        minHeight: "75vh",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        px: 2,
+      }}
+    >
+      <Card sx={{ width: "100%", maxWidth: 420, p: { xs: 3, sm: 4 } }}>
+        <Stack sx={{ gap: 2 }}>
+          <Mascot mood={mood} size={56} message={message} />
+          {children}
+        </Stack>
+      </Card>
+    </Box>
+  );
+}
 
 function ResetPassword() {
   const location = useLocation();
   const token = new URLSearchParams(location.hash.slice(1)).get("token");
-  //console.log("token:", token);
   const [status, setStatus] = useState("checking");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
   const [done, setDone] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     if (!token) {
@@ -24,104 +55,104 @@ function ResetPassword() {
   }, [token]);
 
   async function handleSubmit() {
+    setError("");
+    if (password !== confirmPassword) {
+      setError("Passwords do not match");
+      return;
+    }
+    setSubmitting(true);
     try {
-      if (password !== confirmPassword) {
-        setError("Passwords do not match");
-        return;
-      }
-      const data = await confirmPasswordReset(token, password, confirmPassword);
+      await confirmPasswordReset(token, password, confirmPassword);
       setDone(true);
     } catch (error) {
       setError("Password reset failed, please try again later");
+    } finally {
+      setSubmitting(false);
     }
   }
 
   if (status === "checking") {
     return (
-      <Typography sx={{ mt: 8, textAlign: "center" }}>
-        Checking link...
-      </Typography>
+      <Shell mood="sleepy" message="Checking your link...">
+        <Typography color="text.secondary">One moment.</Typography>
+      </Shell>
     );
   }
 
   if (status === "invalid") {
     return (
-      <Box
-        sx={{
-          maxWidth: 400,
-          mx: "auto",
-          mt: 8,
-          display: "flex",
-          flexDirection: "column",
-          gap: 2,
-        }}
-      >
-        <Typography variant="h5">Link expired</Typography>
-        <Typography>
-          This password reset link is invalid or has expired.
-        </Typography>
-        <Button variant="contained" component={Link} to="/forgot-password">
+      <Shell mood="worried" message="Hmm, this link doesn't work.">
+        <Box>
+          <Typography variant="h3">Link expired</Typography>
+          <Typography color="text.secondary">
+            This password reset link is invalid or has expired.
+          </Typography>
+        </Box>
+        <Button
+          variant="contained"
+          size="large"
+          component={Link}
+          to="/forgot-password"
+        >
           Request a new link
         </Button>
-      </Box>
+      </Shell>
     );
   }
 
   if (done) {
     return (
-      <Box
-        sx={{
-          maxWidth: 400,
-          mx: "auto",
-          mt: 8,
-          display: "flex",
-          flexDirection: "column",
-          gap: 2,
-        }}
-      >
-        <Typography variant="h5">Password reset</Typography>
-        <Typography>
-          Your password has been reset. You can log in now.
-        </Typography>
-        <Button variant="contained" component={Link} to="/login">
+      <Shell mood="happy" message="All set!">
+        <Box>
+          <Typography variant="h3">Password saved</Typography>
+          <Typography color="text.secondary">
+            Your password has been set. You can log in now.
+          </Typography>
+        </Box>
+        <Button variant="contained" size="large" component={Link} to="/login">
           Go to login
         </Button>
-      </Box>
+      </Shell>
     );
   }
 
   return (
-    <Box
-      sx={{
-        maxWidth: 400,
-        mx: "auto",
-        mt: 8,
-        display: "flex",
-        flexDirection: "column",
-        gap: 2,
-      }}
-    >
-      <Typography variant="h4">Reset password</Typography>
+    <Shell mood="worried" message="Pick something you will remember.">
+      <Stack
+        component="form"
+        onSubmit={(e) => {
+          e.preventDefault();
+          handleSubmit();
+        }}
+        sx={{ gap: 2 }}
+      >
+        <Typography variant="h3">Choose a password</Typography>
 
-      <TextField
-        label="New password"
-        type="password"
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
-      />
-      <TextField
-        label="Confirm password"
-        type="password"
-        value={confirmPassword}
-        onChange={(e) => setConfirmPassword(e.target.value)}
-      />
+        <TextField
+          label="New password"
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+        />
+        <TextField
+          label="Confirm password"
+          type="password"
+          value={confirmPassword}
+          onChange={(e) => setConfirmPassword(e.target.value)}
+        />
 
-      {error && <Typography color="error">{error}</Typography>}
+        {error && <Alert severity="error">{error}</Alert>}
 
-      <Button variant="contained" onClick={handleSubmit}>
-        Reset password
-      </Button>
-    </Box>
+        <Button
+          type="submit"
+          variant="contained"
+          size="large"
+          disabled={submitting}
+        >
+          {submitting ? "Saving..." : "Save password"}
+        </Button>
+      </Stack>
+    </Shell>
   );
 }
 

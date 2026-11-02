@@ -17,7 +17,9 @@ import {
   Typography,
 } from "@mui/material";
 import { useAuth } from "../../contexts/AuthContext";
-import { updateProfile, deleteAccount } from "../../api/user";
+import { updateProfile, deleteAccount, changePassword } from "../../api/user";
+import { forgotPassword } from "../../api/auth";
+import { exportCSV } from "../../api/expenses";
 import Mascot from "../../components/Mascot/Mascot";
 
 function SettingRow({ label, value, action, danger, onClick }) {
@@ -151,12 +153,156 @@ function DeleteAccountDialog({ onClose, onDeleted }) {
   );
 }
 
+function ChangePasswordDialog({ onClose, onChanged }) {
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handleSave() {
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      setError("Please fill in all three fields");
+      return;
+    }
+    if (newPassword.length < 8) {
+      // use the same rule as your register schema
+      setError("New password must be at least 8 characters");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setError("New passwords do not match");
+      return;
+    }
+    if (newPassword === currentPassword) {
+      setError("New password must be different from the current one");
+      return;
+    }
+
+    setSaving(true);
+    setError("");
+    try {
+      await changePassword(currentPassword, newPassword, confirmPassword);
+      onChanged();
+    } catch (err) {
+      console.error("password change failed:", err);
+      setError(
+        err.status === 400
+          ? err.message
+          : "Could not change your password, please try again",
+      );
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Dialog open onClose={onClose} fullWidth maxWidth="xs">
+      <DialogTitle>Change password</DialogTitle>
+      <DialogContent>
+        <Box sx={{ display: "flex", flexDirection: "column", gap: 2, mt: 1 }}>
+          <TextField
+            autoFocus
+            fullWidth
+            type="password"
+            label="Current password"
+            value={currentPassword}
+            onChange={(e) => setCurrentPassword(e.target.value)}
+          />
+          <TextField
+            fullWidth
+            type="password"
+            label="New password"
+            value={newPassword}
+            onChange={(e) => setNewPassword(e.target.value)}
+          />
+          <TextField
+            fullWidth
+            type="password"
+            label="Confirm new password"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+          />
+          {error && <Alert severity="error">{error}</Alert>}
+        </Box>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>Cancel</Button>
+        <Button variant="contained" onClick={handleSave} disabled={saving}>
+          {saving ? "Saving..." : "Change password"}
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
+function SetPasswordDialog({ email, onClose }) {
+  const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handleSend() {
+    setSending(true);
+    setError("");
+    try {
+      await forgotPassword(email);
+      setSent(true);
+    } catch (err) {
+      console.error("set password email failed:", err);
+      setError("Could not send the email, please try again");
+    } finally {
+      setSending(false);
+    }
+  }
+
+  return (
+    <Dialog open onClose={onClose} fullWidth maxWidth="xs">
+      <DialogTitle>Set a password</DialogTitle>
+      <DialogContent>
+        <DialogContentText>
+          {sent
+            ? "Check your inbox. We sent a link to " +
+              email +
+              ". Open it to choose your password."
+            : "You sign in with Google, so this account has no password yet. We will email a link to " +
+              email +
+              " where you can set one. After that you can log in with either method."}
+        </DialogContentText>
+        {error && (
+          <Alert severity="error" sx={{ mt: 2 }}>
+            {error}
+          </Alert>
+        )}
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>{sent ? "Done" : "Cancel"}</Button>
+        {!sent && (
+          <Button variant="contained" onClick={handleSend} disabled={sending}>
+            {sending ? "Sending..." : "Email me the link"}
+          </Button>
+        )}
+      </DialogActions>
+    </Dialog>
+  );
+}
+
 function Account() {
   const { user, setUser } = useAuth();
   const [editOpen, setEditOpen] = useState(false);
   const navigate = useNavigate();
   const [deleteOpen, setDeleteOpen] = useState(false);
   const name = user?.name || "friend";
+  const [passwordOpen, setPasswordOpen] = useState(false);
+  const [setPwOpen, setSetPwOpen] = useState(false);
+  const [exportErr, setExportErr] = useState("");
+
+  async function handleExport() {
+    setExportErr("");
+    try {
+      await exportCSV();
+    } catch (error) {
+      setExportErr("Could not export the expenses, please try again later");
+    }
+  }
 
   return (
     <Box sx={{ maxWidth: 900, mx: "auto", mt: 5, px: 2 }}>
@@ -209,6 +355,7 @@ function Account() {
         {/* Right: settings as rows */}
         <Stack sx={{ gap: 3 }}>
           <Card>
+            {exportErr && <Alert severity="error">{exportErr}</Alert>}
             <SettingRow
               label="Name"
               value={name}
@@ -218,12 +365,24 @@ function Account() {
             <Divider />
             <SettingRow label="Email" value={user?.email} />
             <Divider />
-            <SettingRow label="Password" value="••••••••" action="Change" />
+            <SettingRow
+              label="Password"
+              value={
+                user?.has_password
+                  ? "••••••••"
+                  : "Not set. You sign in with Google."
+              }
+              action={user?.has_password ? "Change" : "Set password"}
+              onClick={() =>
+                user?.has_password ? setPasswordOpen(true) : setSetPwOpen(true)
+              }
+            />
             <Divider />
             <SettingRow
               label="Your data"
               value="Download all expenses as CSV"
               action="Export"
+              onClick={handleExport}
             />
           </Card>
 
@@ -254,6 +413,21 @@ function Account() {
             setUser(null);
             navigate("/");
           }}
+        />
+      )}
+      {passwordOpen && (
+        <ChangePasswordDialog
+          onClose={() => setPasswordOpen(false)}
+          onChanged={() => {
+            setUser(null);
+            navigate("/login");
+          }}
+        />
+      )}
+      {setPwOpen && (
+        <SetPasswordDialog
+          email={user?.email}
+          onClose={() => setSetPwOpen(false)}
         />
       )}
     </Box>

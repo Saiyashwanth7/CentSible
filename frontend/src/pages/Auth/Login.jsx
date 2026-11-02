@@ -20,6 +20,7 @@ function Login() {
   const [error, setError] = useState("");
   const { setUser } = useAuth();
   const [submitting, setSubmitting] = useState(false);
+  const [googleStarted, setGoogleStarted] = useState(false);
 
   async function handleSubmit() {
     setError("");
@@ -42,6 +43,8 @@ function Login() {
   }
 
   function handleGoogleLogin() {
+    if (googleStarted) return;
+    setGoogleStarted(true);
     window.location.href = import.meta.env.VITE_API_URL + "/auth/google/";
   }
 
@@ -97,7 +100,12 @@ function Login() {
 
           <Divider>or</Divider>
 
-          <Button variant="outlined" size="large" onClick={handleGoogleLogin}>
+          <Button
+            variant="outlined"
+            size="large"
+            onClick={handleGoogleLogin}
+            disabled={googleStarted}
+          >
             Continue with Google
           </Button>
 

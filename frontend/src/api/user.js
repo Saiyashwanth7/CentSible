@@ -11,8 +11,20 @@ export function updateProfile(name) {
     body: JSON.stringify({ name }),
   });
 }
-export async function changePassword(currentPassword, newPassword) {
-  // TODO: POST /users/me/password  { current_password, new_password }
+export async function changePassword(
+  currentPassword,
+  newPassword,
+  confirmPassword,
+) {
+  return apiFetch("/user/password", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      current_password: currentPassword,
+      password: newPassword,
+      confirm_password: confirmPassword,
+    }),
+  });
 }
 export async function deleteAccount() {
   return apiFetch("/user/delete", { method: "DELETE" });

@@ -20,6 +20,7 @@ function Register() {
   const navigate = useNavigate();
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [googleStarted, setGoogleStarted] = useState(false);
 
   async function handleSubmit() {
     setError("");
@@ -39,6 +40,8 @@ function Register() {
   }
 
   function handleGoogleRegister() {
+    if (googleStarted) return;
+    setGoogleStarted(true);
     window.location.href = import.meta.env.VITE_API_URL + "/auth/google/";
   }
 
@@ -109,6 +112,7 @@ function Register() {
             variant="outlined"
             size="large"
             onClick={handleGoogleRegister}
+            disabled={googleStarted}
           >
             Continue with Google
           </Button>

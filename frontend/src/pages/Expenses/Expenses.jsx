@@ -28,6 +28,60 @@ import { DatePicker } from "@mui/x-date-pickers/DatePicker";
 import dayjs from "dayjs";
 import Mascot from "../../components/Mascot/Mascot";
 
+function DetailRow({ label, value }) {
+  return (
+    <Box sx={{ py: 1.5 }}>
+      <Typography variant="body2" color="text.secondary">
+        {label}
+      </Typography>
+      <Typography sx={{ overflowWrap: "anywhere" }}>{value}</Typography>
+    </Box>
+  );
+}
+
+function ExpenseDetailsDialog({ expense, onClose, onEdit, onDelete }) {
+  return (
+    <Dialog open onClose={onClose} fullWidth maxWidth="xs">
+      <DialogTitle>{expense.title}</DialogTitle>
+      <DialogContent>
+        <Typography variant="h3" sx={{ mb: 1 }}>
+          {"₹" + Number(expense.amount).toLocaleString("en-IN")}
+        </Typography>
+        <Divider />
+        <DetailRow label="Category" value={expense.category?.name || "None"} />
+        <Divider />
+        <DetailRow label="Date" value={expense.date} />
+        <Divider />
+        <DetailRow label="Notes" value={expense.notes || "No notes"} />
+        {/* Only shown if your API sends created_at */}
+        {expense.created_at && (
+          <>
+            <Divider />
+            <DetailRow
+              label="Added on"
+              value={new Date(expense.created_at).toLocaleDateString("en-IN", {
+                day: "numeric",
+                month: "short",
+                year: "numeric",
+              })}
+            />
+          </>
+        )}
+      </DialogContent>
+      <DialogActions>
+        <Button color="error" onClick={onDelete}>
+          Delete
+        </Button>
+        <Box sx={{ flex: 1 }} />
+        <Button onClick={onClose}>Close</Button>
+        <Button variant="contained" onClick={onEdit}>
+          Edit
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
 function Expenses() {
   const [loading, setLoading] = useState(true);
   const [expenses, setExpenses] = useState([]);
@@ -44,6 +98,7 @@ function Expenses() {
   const [editingId, setEditingId] = useState(null);
   const [exportErr, setExportErr] = useState("");
   const [formOpen, setFormOpen] = useState(false);
+  const [selected, setSelected] = useState(null);
   // These below useEffect functions get triggered by the react app instead of any interactive UI tools
   useEffect(() => {
     getExpenses(1, 20, categoryId)
@@ -143,23 +198,10 @@ function Expenses() {
         Expenses
       </Typography>
       <Box sx={{ mb: 3 }}>
-        <Mascot
-          mood="focused"
-          size={48}
-          message={
-            editingId ? "Editing, careful now." : "Log it before you forget!"
-          }
-        />
+        <Mascot mood="focused" size={48} message="Ready when you are." />
       </Box>
 
-      <Button variant="outlined" onClick={handleExport}>
-        Export CSV
-      </Button>
-      <Button variant="contained" onClick={() => setFormOpen(true)}>
-        Add expense
-      </Button>
-
-      {/* List header: title on the left, filter + export on the right */}
+      {/* Title on the left, filter and buttons on the right */}
       <Box
         sx={{
           display: "flex",
@@ -171,7 +213,10 @@ function Expenses() {
         }}
       >
         <Typography variant="h5">Your expenses</Typography>
-        <Stack direction="row" sx={{ gap: 1, alignItems: "center" }}>
+        <Stack
+          direction="row"
+          sx={{ gap: 1, alignItems: "center", flexWrap: "wrap" }}
+        >
           <TextField
             select
             size="small"
@@ -190,70 +235,10 @@ function Expenses() {
           <Button variant="outlined" onClick={handleExport}>
             Export CSV
           </Button>
+          <Button variant="contained" onClick={() => setFormOpen(true)}>
+            Add expense
+          </Button>
         </Stack>
-        <Dialog open={formOpen} onClose={resetForm} fullWidth maxWidth="sm">
-          <DialogTitle>
-            {editingId ? "Edit expense" : "Add expense"}
-          </DialogTitle>
-          <DialogContent>
-            <Box
-              sx={{ display: "flex", flexDirection: "column", gap: 2, mt: 1 }}
-            >
-              <TextField
-                label="Title"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-              />
-              <Box
-                sx={{
-                  display: "grid",
-                  gap: 2,
-                  gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" },
-                }}
-              >
-                <TextField
-                  label="Amount"
-                  type="number"
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
-                />
-                <TextField
-                  select
-                  label="Category"
-                  value={formCategoryId}
-                  onChange={(e) => setFormCategoryId(e.target.value)}
-                >
-                  {categories.map((c) => (
-                    <MenuItem key={c.id} value={c.id}>
-                      {c.name}
-                    </MenuItem>
-                  ))}
-                </TextField>
-                <DatePicker
-                  label="Date"
-                  value={date ? dayjs(date) : null}
-                  onChange={(v) =>
-                    setDate(v && v.isValid() ? v.format("YYYY-MM-DD") : "")
-                  }
-                  format="DD/MM/YYYY"
-                  slotProps={{ textField: { fullWidth: true } }}
-                />
-                <TextField
-                  label="Notes"
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                />
-              </Box>
-              {formErr && <Alert severity="error">{formErr}</Alert>}
-            </Box>
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={resetForm}>Cancel</Button>
-            <Button variant="contained" onClick={handleSubmit}>
-              {editingId ? "Update" : "Add expense"}
-            </Button>
-          </DialogActions>
-        </Dialog>
       </Box>
 
       {err && (
@@ -275,10 +260,9 @@ function Expenses() {
       {!err && expenses.length === 0 && (
         <Card>
           <CardContent sx={{ textAlign: "center", py: 5 }}>
-            <Typography sx={{ fontSize: 48, lineHeight: 1 }}>😴</Typography>
-            <Typography sx={{ mt: 1 }}>No expenses yet.</Typography>
+            <Typography>No expenses yet.</Typography>
             <Typography variant="body2" color="text.secondary">
-              Add your first one above.
+              Tap "Add expense" to log your first one.
             </Typography>
           </CardContent>
         </Card>
@@ -290,12 +274,15 @@ function Expenses() {
             <Box key={exp.id}>
               {i > 0 && <Divider />}
               <Box
+                onClick={() => setSelected(exp)}
                 sx={{
                   display: "flex",
                   alignItems: "center",
                   gap: 2,
                   px: 3,
                   py: 2,
+                  cursor: "pointer",
+                  "&:hover": { bgcolor: "action.hover" },
                 }}
               >
                 <Box sx={{ flex: 1, minWidth: 0 }}>
@@ -310,13 +297,22 @@ function Expenses() {
                 <Typography sx={{ fontWeight: 700 }}>
                   {"₹" + Number(exp.amount).toLocaleString("en-IN")}
                 </Typography>
-                <Button size="small" onClick={() => handleEdit(exp)}>
+                <Button
+                  size="small"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleEdit(exp);
+                  }}
+                >
                   Edit
                 </Button>
                 <Button
                   size="small"
                   color="error"
-                  onClick={() => handleDelete(exp.id)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDelete(exp.id);
+                  }}
                 >
                   Delete
                 </Button>
@@ -324,6 +320,83 @@ function Expenses() {
             </Box>
           ))}
         </Card>
+      )}
+
+      {/* Add / edit dialog */}
+      <Dialog open={formOpen} onClose={resetForm} fullWidth maxWidth="sm">
+        <DialogTitle>{editingId ? "Edit expense" : "Add expense"}</DialogTitle>
+        <DialogContent>
+          <Box sx={{ display: "flex", flexDirection: "column", gap: 2, mt: 1 }}>
+            <TextField
+              label="Title"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+            />
+            <Box
+              sx={{
+                display: "grid",
+                gap: 2,
+                gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" },
+              }}
+            >
+              <TextField
+                label="Amount"
+                type="number"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+              />
+              <TextField
+                select
+                label="Category"
+                value={formCategoryId}
+                onChange={(e) => setFormCategoryId(e.target.value)}
+              >
+                {categories.map((c) => (
+                  <MenuItem key={c.id} value={c.id}>
+                    {c.name}
+                  </MenuItem>
+                ))}
+              </TextField>
+              <DatePicker
+                label="Date"
+                value={date ? dayjs(date) : null}
+                onChange={(v) =>
+                  setDate(v && v.isValid() ? v.format("YYYY-MM-DD") : "")
+                }
+                format="DD/MM/YYYY"
+                slotProps={{ textField: { fullWidth: true } }}
+              />
+              <TextField
+                label="Notes"
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+              />
+            </Box>
+            {formErr && <Alert severity="error">{formErr}</Alert>}
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={resetForm}>Cancel</Button>
+          <Button variant="contained" onClick={handleSubmit}>
+            {editingId ? "Update" : "Add expense"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Details dialog, only rendered while an expense is selected */}
+      {selected && (
+        <ExpenseDetailsDialog
+          expense={selected}
+          onClose={() => setSelected(null)}
+          onEdit={() => {
+            handleEdit(selected);
+            setSelected(null);
+          }}
+          onDelete={() => {
+            handleDelete(selected.id);
+            setSelected(null);
+          }}
+        />
       )}
     </Box>
   );

@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { Box, Button, Chip, Container, Stack, Typography } from "@mui/material";
 import { useAuth } from "../../contexts/AuthContext";
 import { getDashboard } from "../../api/expenses";
+import Mascot from "../../components/Mascot/Mascot";
 
 const GITHUB_URL = "https://github.com/Saiyashwanth7/CentSible";
 
@@ -61,16 +62,17 @@ const sampleRows = [
 // Top 4 categories by spend, with each one's share of the total.
 function buildRows(stats) {
   const all = stats.category_breakdown;
-  const sum = all.reduce((acc, c) => acc + c.total, 0);
+  const sum = all.reduce((acc, c) => acc + Number(c.total), 0);
   return [...all]
-    .sort((a, b) => b.total - a.total)
+    .sort((a, b) => Number(b.total) - Number(a.total))
     .slice(0, 4)
     .map((c) => {
-      const pct = sum > 0 ? Math.round((c.total / sum) * 100) : 0;
+      const pct = sum > 0 ? Math.round((Number(c.total) / sum) * 100) : 0;
       return {
         label: c.category,
         pct: pct,
-        value: c.total.toLocaleString("en-IN") + " (" + pct + "%)",
+        value:
+          "₹" + Number(c.total).toLocaleString("en-IN") + " (" + pct + "%)",
       };
     });
 }
@@ -204,7 +206,9 @@ function HeroCard({ user, loading, stats, statsError }) {
       title="Your spending by category"
       rows={buildRows(stats)}
       to="/dashboard"
-      footer={"This month: " + stats.total_this_month.toLocaleString("en-IN")}
+      footer={
+        "This month: ₹" + Number(stats.total_this_month).toLocaleString("en-IN")
+      }
     />
   );
 }
@@ -213,6 +217,7 @@ function Landing() {
   const { user, loading } = useAuth();
   const [stats, setStats] = useState(null);
   const [statsError, setStatsError] = useState(false);
+  const firstName = user?.name?.split(" ")[0];
 
   // Load the user's real numbers. Reset when the user changes so one
   // person's data is never shown to the next person on the same browser.
@@ -271,9 +276,13 @@ function Landing() {
             {!loading &&
               (user ? (
                 <Box>
-                  <Typography sx={{ mb: 2 }}>
-                    Welcome back, {user.name}.
-                  </Typography>
+                  <Box sx={{ mb: 2 }}>
+                    <Mascot
+                      mood="happy"
+                      size={56}
+                      message={"Welcome back, " + firstName + "!"}
+                    />
+                  </Box>
                   <Stack direction="row" sx={{ gap: 2, flexWrap: "wrap" }}>
                     <Button
                       variant="contained"
@@ -302,24 +311,33 @@ function Landing() {
                   </Stack>
                 </Box>
               ) : (
-                <Stack direction="row" sx={{ gap: 2, flexWrap: "wrap" }}>
-                  <Button
-                    variant="contained"
-                    size="large"
-                    component={Link}
-                    to="/register"
-                  >
-                    Create free account
-                  </Button>
-                  <Button
-                    variant="outlined"
-                    size="large"
-                    component={Link}
-                    to="/login"
-                  >
-                    Log in
-                  </Button>
-                </Stack>
+                <Box>
+                  <Box sx={{ mb: 3 }}>
+                    <Mascot
+                      mood="happy"
+                      size={56}
+                      message="Hi! I'll keep an eye on your money."
+                    />
+                  </Box>
+                  <Stack direction="row" sx={{ gap: 2, flexWrap: "wrap" }}>
+                    <Button
+                      variant="contained"
+                      size="large"
+                      component={Link}
+                      to="/register"
+                    >
+                      Create free account
+                    </Button>
+                    <Button
+                      variant="outlined"
+                      size="large"
+                      component={Link}
+                      to="/login"
+                    >
+                      Log in
+                    </Button>
+                  </Stack>
+                </Box>
               ))}
           </Box>
 
