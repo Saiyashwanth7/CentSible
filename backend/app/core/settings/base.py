@@ -1,7 +1,7 @@
 from pydantic_settings import BaseSettings
 from typing import Any
 import os
-
+from sqlalchemy.engine import URL
 from app.enums.environments import AppEnvTypes
 
 
@@ -25,10 +25,12 @@ class BaseAppSettings(BaseSettings):
     version: str = "1.0.0"
 
     # cors
-    allow_credentials: bool = True
+    # allow_credentials: bool = True
     allow_methods: list[str] = ["*"]
     allow_headers: list[str] = ["*"]
     allowed_hosts: list[str] = ["*"]
+    # allow_origins: list[str] = ["*"]
+    allow_credentials: bool = True
     allow_origins: list[str] = ["*"]
 
     # auth
@@ -54,6 +56,8 @@ class BaseAppSettings(BaseSettings):
     database_password: str | None = None
     database_user: str | None = None
     database_port: int = 5432
+    database_port: int = 5432
+    database_ssl: bool = False
 
     # Cloud service settings
     bucket_secret_key: str | None = None
@@ -68,20 +72,36 @@ class BaseAppSettings(BaseSettings):
     redis_port: int | None = None
     redis_db: int | None = None
     redis_password: str | None = None
+    redis_username: str | None = None
+    redis_ssl: bool = False
     brevo_api_key: str | None = None
     from_email: str | None = None
 
     # celery
     celery_broker_url: str | None = None
 
-    # @property would just let the user get the function return without calling it (with the "()" brackets)
+    def _database_url(self, driver: str, query: dict | None = None) -> str:
+        # URL.create encodes special characters in the password for us
+        return URL.create(
+            driver,
+            username=self.database_user,
+            password=self.database_password,
+            host=self.database_host,
+            port=self.database_port,
+            database=self.database_name,
+            query=query or {},
+        ).render_as_string(hide_password=False)
+
     @property
     def async_driver_database_url(self) -> str:
-        return f"postgresql+asyncpg://{self.database_user}:{self.database_password}@{self.database_host}:{self.database_port}/{self.database_name}"
+        # asyncpg gets its SSL setting from connect_args in session.py
+        return self._database_url("postgresql+asyncpg")
 
     @property
     def sync_driver_database_url(self) -> str:
-        return f"postgresql+psycopg2://{self.database_user}:{self.database_password}@{self.database_host}:{self.database_port}/{self.database_name}"
+        # psycopg2 (Alembic) takes SSL from the URL
+        query = {"sslmode": "require"} if self.database_ssl else None
+        return self._database_url("postgresql+psycopg2", query)
 
     @property
     def fast_api_kwargs(self) -> dict[str, Any]:
