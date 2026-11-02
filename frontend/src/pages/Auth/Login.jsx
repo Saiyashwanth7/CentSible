@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { login } from "../../api/auth";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate, Link, useSearchParams } from "react-router-dom";
 import {
   Alert,
   Box,
@@ -17,7 +17,12 @@ function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const navigate = useNavigate();
-  const [error, setError] = useState("");
+  const [searchParams] = useSearchParams();
+  const [error, setError] = useState(
+    searchParams.get("error") === "google"
+      ? "Google sign-in failed, please try again."
+      : "",
+  );
   const { setUser } = useAuth();
   const [submitting, setSubmitting] = useState(false);
   const [googleStarted, setGoogleStarted] = useState(false);
@@ -45,7 +50,7 @@ function Login() {
   function handleGoogleLogin() {
     if (googleStarted) return;
     setGoogleStarted(true);
-    window.location.href = import.meta.env.VITE_API_URL + "/auth/google/";
+    window.location.href = import.meta.env.VITE_API_URL + "/auth/google";
   }
 
   return (
