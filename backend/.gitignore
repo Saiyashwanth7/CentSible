@@ -5,3 +5,4 @@ venv/
 *.pyc
 celerybeat-schedule*
 .env.docker
+.env.supabase

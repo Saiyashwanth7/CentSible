@@ -7,7 +7,7 @@ class DevelopmentSettings(BaseAppSettings):
     debug: bool = True
     frontend_url: str = "http://localhost:3000"
     allowed_hosts: list[str] = ["*"]
-    allow_origins: list[str] = ["http://localhost:3000"]
+    allow_origins: list[str] = ["http://localhost:5173"]  #  ["http://localhost:3000"]
     database_name: str = "boilerplatedb"
     database_host: str = "db"
     database_password: str = "password"

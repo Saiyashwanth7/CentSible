@@ -88,13 +88,21 @@ def delete_tokens(response: Response) -> None:
 
 def delete_access_token(response: Response) -> None:
     response.delete_cookie(
-        key="access_token", httponly=True, secure=False, samesite="lax", path="/"
+        key="access_token",
+        httponly=True,
+        secure=not settings.debug,
+        samesite="lax",
+        path="/",
     )
 
 
 def delete_refresh_token(response: Response) -> None:
     response.delete_cookie(
-        key="refresh_token", httponly=True, secure=False, samesite="lax", path="/"
+        key="refresh_token",
+        httponly=True,
+        secure=not settings.debug,
+        samesite="lax",
+        path="/",
     )
 
 
