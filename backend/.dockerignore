@@ -1,0 +1,10 @@
+venv
+__pycache__
+*.pyc
+.git
+.env
+.env.*
+celerybeat-schedule*
+tests
+docker-compose.yml
+run.sh

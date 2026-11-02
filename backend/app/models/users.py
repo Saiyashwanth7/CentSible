@@ -56,3 +56,7 @@ class User(Base):
     categories = relationship(
         "Category", back_populates="owner", cascade="all, delete", passive_deletes=True
     )
+
+    @property
+    def has_password(self) -> bool:
+        return self.hashed_password is not None

@@ -22,6 +22,7 @@ celery_task_queue.conf.update(
     task_time_limit=120,
     timezone="Asia/Kolkata",
     enable_utc=True,
+    broker_pool_limit=2,
     beat_schedule={
         "materialize-recurring-expenses": {
             "task": "task_materialize_recurring_expenses",

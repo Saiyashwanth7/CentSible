@@ -1,9 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Response
 from app.services.user_services import *
 from app.exceptions.user import UserAlreadyExists
-from app.schema.user import UserResponse, UserCreate, UserPatch
+from app.schema.user import UserResponse, UserCreate, UserPatch, UserPasswordPatch
 import app.services.user_services as user_services
 from app.auth.jwt import delete_tokens
+from app.auth.password import verify_password
 from app.models.users import User
 from app.routers.dependencies import CurrentUser, SessionDep
 from app.celery.tasks.email_tasks import task_send_welcome_email
@@ -61,3 +62,15 @@ async def delete_user(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
     delete_tokens(response)  # same call as your logout route
+
+
+@router.patch("/password", status_code=status.HTTP_204_NO_CONTENT)
+async def patch_user_password(
+    response: Response,
+    user: CurrentUser,
+    passwordRequest: UserPasswordPatch,
+    session: SessionDep,
+) -> None:
+
+    await user_services.patch_user_password(user.id, passwordRequest, session)
+    delete_tokens(response)

@@ -1,8 +1,9 @@
 from app.routers.v1.auth import password_reset, password_auth
 from app.routers.v1 import user, budget, category, expense, insights, recurring
 from fastapi import APIRouter
-
+from sqlalchemy import text
 from app.routers.v1.auth import google_auth
+from app.routers.dependencies import SessionDep
 
 router = APIRouter()
 

@@ -1,10 +1,11 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
-
+from sqlalchemy import text
 from app.core.config import settings
 from app.exceptions.handlers import register_exception_handler
 from app.routers.v1 import routers
+from app.routers.dependencies import SessionDep
 
 app = FastAPI(title="CentSible API", version="1.0.0")
 
@@ -29,6 +30,10 @@ def create_app() -> FastAPI:
 app = create_app()
 
 
-@app.get("/")
-def health_check():
-    return {"Status": "Alive"}
+@app.get("/health")
+async def health_db(session: SessionDep):
+    try:
+        await session.execute(text("SELECT 1"))
+    except Exception:
+        raise HTTPException(status_code=503, detail="Database unavailable")
+    return {"status": "ok"}

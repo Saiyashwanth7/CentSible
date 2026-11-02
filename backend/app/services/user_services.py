@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-
+from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -10,8 +10,8 @@ from app.exceptions.user import (
     UserGoogleIdDoesNotExist,
 )
 from app.models.users import User
-from app.schema.user import UserCreate, UserPatch
-from app.auth.password import hash_password
+from app.schema.user import UserCreate, UserPatch, UserPasswordPatch
+from app.auth.password import hash_password, verify_password
 from app.utils.logging import Logger, LogLevel
 from app.services.category_services import seed_default_categories
 
@@ -120,3 +120,21 @@ async def delete_user(id: int, session: AsyncSession) -> None:
     await session.delete(user)
     await session.flush()
     return
+
+
+async def patch_user_password(
+    user_id: int, passwordRequest: UserPasswordPatch, session: AsyncSession
+) -> None:
+    user = await get_user_by_id(user_id, session)
+
+    if user.hashed_password is None:
+        raise HTTPException(
+            status_code=400,
+            detail="This account has no password yet, use Set password",
+        )
+    if not verify_password(passwordRequest.current_password, user.hashed_password):
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+
+    user.hashed_password = hash_password(passwordRequest.password)
+    user.password_updated_at = datetime.now(timezone.utc)
+    await session.flush()

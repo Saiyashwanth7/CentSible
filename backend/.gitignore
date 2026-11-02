@@ -1,0 +1,7 @@
+.env
+.env.test
+__pycache__/
+venv/
+*.pyc
+celerybeat-schedule*
+.env.docker
