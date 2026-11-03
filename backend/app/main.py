@@ -30,7 +30,7 @@ def create_app() -> FastAPI:
 app = create_app()
 
 
-@app.get("/health")
+@app.api_route("/health", methods=["GET", "HEAD"])
 async def health_db(session: SessionDep):
     try:
         await session.execute(text("SELECT 1"))
