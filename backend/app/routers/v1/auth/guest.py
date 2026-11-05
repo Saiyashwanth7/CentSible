@@ -7,7 +7,7 @@ from app.routers.dependencies import SessionDep
 router = APIRouter()
 
 
-@router.post("/", response_model=UserResponse)
+@router.post("", response_model=UserResponse)
 async def guest_login(request: Request, response: Response, session: SessionDep):
     # 1. rate limit by IP (get the IP the same way your login route does)
     ip = request.client.host
