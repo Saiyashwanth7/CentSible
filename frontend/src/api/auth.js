@@ -49,5 +49,5 @@ export function confirmPasswordReset(token, password, confirmPassword) {
 }
 
 export function guestLogin() {
-  return apiFetch("/auth/guest/", { method: "POST" });
+  return apiFetch("/auth/guest", { method: "POST" });
 }
