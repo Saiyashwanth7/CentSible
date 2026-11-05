@@ -14,6 +14,8 @@ from app.schema.user import UserCreate, UserPatch, UserPasswordPatch
 from app.auth.password import hash_password, verify_password
 from app.utils.logging import Logger, LogLevel
 from app.services.category_services import seed_default_categories
+from app.services.guest_seed import seed_guest_data
+import secrets
 
 
 # get user by id
@@ -138,3 +140,17 @@ async def patch_user_password(
     user.hashed_password = hash_password(passwordRequest.password)
     user.password_updated_at = datetime.now(timezone.utc)
     await session.flush()
+
+
+async def create_guest_user(session: AsyncSession) -> User:
+    user = User(
+        email=f"guest-{secrets.token_hex(8)}@guest.example.com",
+        name="Guest",
+        hashed_password=None,
+        is_guest=True,
+    )
+    session.add(user)
+    await session.flush()  # gives the user its id
+    # if your register flow seeds starter categories, call that function here
+    await seed_guest_data(user.id, session)
+    return user

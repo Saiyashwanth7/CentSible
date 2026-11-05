@@ -12,6 +12,7 @@ import {
   Typography,
 } from "@mui/material";
 import { useAuth } from "../../contexts/AuthContext";
+import DemoButton from "../../components/DemoButton/DemoButton";
 
 function Login() {
   const [email, setEmail] = useState("");
@@ -113,6 +114,7 @@ function Login() {
           >
             Continue with Google
           </Button>
+          <DemoButton size="large" />
 
           <Stack direction="row" sx={{ justifyContent: "space-between" }}>
             <Button size="small" component={Link} to="/forgot-password">

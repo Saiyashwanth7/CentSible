@@ -1,4 +1,4 @@
-from app.routers.v1.auth import password_reset, password_auth
+from app.routers.v1.auth import password_reset, password_auth, guest
 from app.routers.v1 import user, budget, category, expense, insights, recurring
 from fastapi import APIRouter
 from sqlalchemy import text
@@ -23,3 +23,6 @@ router.include_router(password_auth.router, prefix="/auth", tags=["auth"])
 router.include_router(
     password_reset.router, prefix="/auth/password-reset", tags=["password-reset"]
 )
+
+# sign-in as guest
+router.include_router(guest.router, prefix="/auth/guest", tags=["guest-login"])

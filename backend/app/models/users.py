@@ -8,6 +8,7 @@ from sqlalchemy import (
     Integer,
     String,
     Numeric,
+    false,
 )
 from decimal import Decimal
 from sqlalchemy.orm import relationship
@@ -37,6 +38,31 @@ class User(Base):
         default=lambda: datetime.now(timezone.utc),
         nullable=False,
     )
+
+    is_guest = Column(Boolean, nullable=False, default=False, server_default=false())
+
+    expenses = relationship(
+        "Expense", back_populates="owner", cascade="all, delete", passive_deletes=True
+    )
+
+    budgets = relationship(
+        "Budget", back_populates="owner", cascade="all, delete", passive_deletes=True
+    )
+
+    recurring = relationship(
+        "RecurringExpense",
+        back_populates="owner",
+        cascade="all, delete",
+        passive_deletes=True,
+    )
+
+    categories = relationship(
+        "Category", back_populates="owner", cascade="all, delete", passive_deletes=True
+    )
+
+    @property
+    def has_password(self) -> bool:
+        return self.hashed_password is not None
 
     expenses = relationship(
         "Expense", back_populates="owner", cascade="all, delete", passive_deletes=True

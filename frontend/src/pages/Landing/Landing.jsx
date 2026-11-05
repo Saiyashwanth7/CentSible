@@ -4,6 +4,7 @@ import { Box, Button, Chip, Container, Stack, Typography } from "@mui/material";
 import { useAuth } from "../../contexts/AuthContext";
 import { getDashboard } from "../../api/expenses";
 import Mascot from "../../components/Mascot/Mascot";
+import DemoButton from "../../components/DemoButton/DemoButton";
 
 const GITHUB_URL = "https://github.com/Saiyashwanth7/CentSible";
 
@@ -336,6 +337,7 @@ function Landing() {
                     >
                       Log in
                     </Button>
+                    <DemoButton size="large" />
                   </Stack>
                 </Box>
               ))}
