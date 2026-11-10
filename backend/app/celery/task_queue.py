@@ -9,6 +9,7 @@ celery_task_queue = Celery(
     include=[
         "app.celery.tasks.email_tasks",
         "app.celery.tasks.recurring_tasks",
+        "app.celery.tasks.guest_tasks",
     ],
 )
 
@@ -29,6 +30,10 @@ celery_task_queue.conf.update(
             "schedule": crontab(
                 hour=0, minute=10
             ),  # crontab("*"),  -> for testing beat scheduling
+        },
+        "cleanup-expired-guests": {
+            "task": "task_cleanup_expired_guests",
+            "schedule": crontab(minute=0),  # every hour, on the hour
         },
     },
 )
