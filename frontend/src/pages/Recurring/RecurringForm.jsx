@@ -132,7 +132,9 @@ function RecurringForm({ open, onClose, onCreated }) {
         </Box>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose}>Cancel</Button>
+        <Button onClick={resetForm} disabled={formSubmit}>
+          Cancel
+        </Button>
         <Button
           variant="contained"
           onClick={handleSubmit}
