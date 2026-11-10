@@ -89,6 +89,7 @@ function Recurring() {
   const [formOpen, setFormOpen] = useState(false);
   const [selected, setSelected] = useState(null); // item shown in the details dialog
   const [deletingId, setDeletingId] = useState(null); // id of the row being deleted
+  const [togglingId, setTogglingId] = useState(null); // id of the row being paused/resumed
 
   async function loadRecurring() {
     try {
@@ -108,6 +109,7 @@ function Recurring() {
   }, []);
 
   async function handleToggle(r) {
+    setTogglingId(r.id);
     try {
       await updateRecurring(r.id, { active: !r.active });
       setToggleErr("");
@@ -115,6 +117,8 @@ function Recurring() {
     } catch (error) {
       setToggleErr("Something went wrong, please try again later");
       console.error(error);
+    } finally {
+      setTogglingId(null);
     }
   }
 
@@ -205,6 +209,8 @@ function Recurring() {
         <Card>
           {recurring.map((r, i) => {
             const isDeleting = deletingId === r.id;
+            const isToggling = togglingId === r.id;
+            const isBusy = isDeleting || isToggling;
             return (
               <Box key={r.id}>
                 {i > 0 && <Divider />}
@@ -244,18 +250,24 @@ function Recurring() {
                   />
                   <Button
                     size="small"
-                    disabled={isDeleting}
+                    disabled={isBusy}
                     onClick={(e) => {
                       e.stopPropagation();
                       handleToggle(r);
                     }}
                   >
-                    {r.active ? "Pause" : "Resume"}
+                    {isToggling
+                      ? r.active
+                        ? "Pausing..."
+                        : "Resuming..."
+                      : r.active
+                        ? "Pause"
+                        : "Resume"}
                   </Button>
                   <Button
                     size="small"
                     color="error"
-                    disabled={isDeleting}
+                    disabled={isBusy}
                     onClick={(e) => {
                       e.stopPropagation();
                       handleDelete(r);
