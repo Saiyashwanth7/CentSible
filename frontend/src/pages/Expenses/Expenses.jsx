@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   getExpenses,
   createExpense,
@@ -100,14 +100,26 @@ function Expenses() {
   const [exportErr, setExportErr] = useState("");
   const [formOpen, setFormOpen] = useState(false);
   const [selected, setSelected] = useState(null);
-  const [deletingId, setDeletingId] = useState(null);
-  const [itemDisable, setitemDisable] = useState(false);
-  // These below useEffect functions get triggered by the react app instead of any interactive UI tools
+  const [pending, setPending] = useState({}); // { [id]: "delete" } -> drives the UI
+  const pendingRef = useRef({}); // same data, always up to date inside async functions
+
+  // Loads the list again whenever the filter changes.
+  // The cancelled flag stops an older, slower response from overwriting a newer one.
   useEffect(() => {
+    let cancelled = false;
     getExpenses(1, 20, categoryId)
-      .then((data) => setExpenses(data.items))
-      .catch(() => setErr("Could not load Expenses"))
-      .finally(() => setLoading(false));
+      .then((data) => {
+        if (!cancelled) setExpenses(data.items);
+      })
+      .catch(() => {
+        if (!cancelled) setErr("Could not load Expenses");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [categoryId]);
 
   useEffect(() => {
@@ -116,9 +128,23 @@ function Expenses() {
       .catch((error) => console.log("categories error:", error));
   }, []);
 
+  function setBusy(id, action) {
+    pendingRef.current = { ...pendingRef.current, [id]: action };
+    setPending((p) => ({ ...p, [id]: action }));
+  }
+
+  function clearBusy(id) {
+    const { [id]: _removedRef, ...restRef } = pendingRef.current;
+    pendingRef.current = restRef;
+    setPending((p) => {
+      const { [id]: _removed, ...rest } = p;
+      return rest;
+    });
+  }
+
   // to reset the expense form after creating the expense or cancelling the update
   function resetForm() {
-    setFormOpen(false); // add this line
+    setFormOpen(false);
     setEditingId(null);
     setTitle("");
     setAmount("");
@@ -146,7 +172,8 @@ function Expenses() {
         await createExpense(title, Number(amount), formCategoryId, date, notes);
       }
       const result = await getExpenses(1, 20, categoryId);
-      setExpenses(result.items);
+      // Hide rows whose delete is still in progress, so they don't pop back into the list
+      setExpenses(result.items.filter((x) => !pendingRef.current[x.id]));
       resetForm();
     } catch (error) {
       console.log(error);
@@ -158,28 +185,30 @@ function Expenses() {
 
   // This just sets the form with the expense details of exp.id, doesn't let users submit or do anything
   function handleEdit(exp) {
-    setFormOpen(true); // add this line
+    setFormOpen(true);
     setEditingId(exp.id);
     setTitle(exp.title);
     setAmount(exp.amount);
-    setFormCategoryId(exp.category.id);
+    setFormCategoryId(exp.category?.id ?? ""); // category can be missing
     setDate(exp.date);
-    setNotes(exp.notes);
+    setNotes(exp.notes ?? "");
+    setFormErr("");
   }
 
   // for deleting an expense
   async function handleDelete(expenseId) {
-    setDeletingId(expenseId);
+    if (pendingRef.current[expenseId]) return; // same row double click guard
+    setBusy(expenseId, "delete");
     try {
       await deleteExpense(expenseId);
-      const result = await getExpenses(1, 20, categoryId);
-      setExpenses(result.items);
       setDelErr("");
+      // remove locally instead of refetching
+      setExpenses((list) => list.filter((x) => x.id !== expenseId));
     } catch (error) {
       setDelErr("Error occurred while deleting, please try again later");
       console.log(error);
     } finally {
-      setDeletingId(null);
+      clearBusy(expenseId);
     }
   }
 
@@ -287,7 +316,7 @@ function Expenses() {
       {expenses.length > 0 && (
         <Card>
           {expenses.map((exp, i) => {
-            const isDeleting = deletingId === exp.id;
+            const isDeleting = pending[exp.id] === "delete";
 
             return (
               <Box key={exp.id}>

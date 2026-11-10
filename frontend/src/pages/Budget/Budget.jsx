@@ -139,7 +139,7 @@ function Budget() {
   const [catErr, setCatErr] = useState("");
   const [delErr, setDelErr] = useState("");
   const [selected, setSelected] = useState(null); // budget shown in the details dialog
-  const [deletingId, setDeletingId] = useState(null); // id of the row being deleted
+  const [pending, setPending] = useState({}); // { [id]: "delete" }
 
   // form (dialog) state
   const [formOpen, setFormOpen] = useState(false);
@@ -168,6 +168,17 @@ function Budget() {
         setCatErr("Couldn't load categories, please try again later"),
       );
   }, []);
+
+  function setBusy(id, action) {
+    setPending((p) => ({ ...p, [id]: action }));
+  }
+
+  function clearBusy(id) {
+    setPending((p) => {
+      const { [id]: _removed, ...rest } = p;
+      return rest;
+    });
+  }
 
   function resetForm() {
     setFormOpen(false);
@@ -207,17 +218,18 @@ function Budget() {
   }
 
   async function handleDelete(bgtId) {
-    setDeletingId(bgtId);
+    if (pending[bgtId]) return; // same row double click guard
+    setBusy(bgtId, "delete");
     try {
       await deleteBudget(bgtId);
-      const result = await getBudgets();
-      setBudgets(result);
       setDelErr("");
+      // refetch kakunda local ga remove
+      setBudgets((list) => list.filter((x) => x.id !== bgtId));
     } catch (error) {
       setDelErr("Couldn't delete the budget, please try again later");
       console.error(error);
     } finally {
-      setDeletingId(null);
+      clearBusy(bgtId);
     }
   }
 
@@ -298,7 +310,7 @@ function Budget() {
       {budgets.length > 0 && (
         <Card>
           {budgets.map((bgt, i) => {
-            const isDeleting = deletingId === bgt.id;
+            const isDeleting = pending[bgt.id] === "delete";
             return (
               <Box key={bgt.id}>
                 {i > 0 && <Divider />}
