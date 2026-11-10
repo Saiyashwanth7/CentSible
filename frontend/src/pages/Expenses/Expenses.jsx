@@ -24,6 +24,7 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  LinearProgress,
 } from "@mui/material";
 import { DatePicker } from "@mui/x-date-pickers/DatePicker";
 import dayjs from "dayjs";
@@ -106,15 +107,16 @@ function Expenses() {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [refreshKey, setRefreshKey] = useState(0); // bump this to reload the current page
+  const [pageLoading, setPageLoading] = useState(false);
 
   // Loads the list again whenever the filter, the page or refreshKey changes.
   // The cancelled flag stops an older, slower response from overwriting a newer one.
   useEffect(() => {
     let cancelled = false;
+    setPageLoading(true);
     getExpenses(page, 20, categoryId)
       .then((data) => {
         if (cancelled) return;
-        // Hide rows whose delete is still in progress, so they don't pop back into the list
         setExpenses(data.items.filter((x) => !pendingRef.current[x.id]));
         setTotalPages(Math.max(1, Math.ceil(data.total / 20)));
         setErr("");
@@ -123,7 +125,10 @@ function Expenses() {
         if (!cancelled) setErr("Could not load Expenses");
       })
       .finally(() => {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+          setPageLoading(false);
+        }
       });
     return () => {
       cancelled = true;
@@ -329,7 +334,14 @@ function Expenses() {
       )}
 
       {expenses.length > 0 && (
-        <Card>
+        <Card
+          sx={{
+            opacity: pageLoading ? 0.6 : 1,
+            pointerEvents: pageLoading ? "none" : "auto",
+            transition: "opacity 0.2s",
+          }}
+        >
+          {pageLoading && <LinearProgress />}
           {expenses.map((exp, i) => {
             const isDeleting = pending[exp.id] === "delete";
 
@@ -488,6 +500,7 @@ function Expenses() {
           <Pagination
             count={totalPages}
             page={page}
+            disabled={pageLoading}
             onChange={(_, p) => setPage(p)}
           />
         </Box>
