@@ -16,6 +16,7 @@ import {
   CircularProgress,
   Divider,
   MenuItem,
+  Pagination,
   Stack,
   TextField,
   Typography,
@@ -102,14 +103,21 @@ function Expenses() {
   const [selected, setSelected] = useState(null);
   const [pending, setPending] = useState({}); // { [id]: "delete" } -> drives the UI
   const pendingRef = useRef({}); // same data, always up to date inside async functions
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [refreshKey, setRefreshKey] = useState(0); // bump this to reload the current page
 
-  // Loads the list again whenever the filter changes.
+  // Loads the list again whenever the filter, the page or refreshKey changes.
   // The cancelled flag stops an older, slower response from overwriting a newer one.
   useEffect(() => {
     let cancelled = false;
-    getExpenses(1, 20, categoryId)
+    getExpenses(page, 20, categoryId)
       .then((data) => {
-        if (!cancelled) setExpenses(data.items);
+        if (cancelled) return;
+        // Hide rows whose delete is still in progress, so they don't pop back into the list
+        setExpenses(data.items.filter((x) => !pendingRef.current[x.id]));
+        setTotalPages(Math.max(1, Math.ceil(data.total / 20)));
+        setErr("");
       })
       .catch(() => {
         if (!cancelled) setErr("Could not load Expenses");
@@ -120,7 +128,7 @@ function Expenses() {
     return () => {
       cancelled = true;
     };
-  }, [categoryId]);
+  }, [categoryId, page, refreshKey]);
 
   useEffect(() => {
     getCategories()
@@ -171,9 +179,8 @@ function Expenses() {
       } else {
         await createExpense(title, Number(amount), formCategoryId, date, notes);
       }
-      const result = await getExpenses(1, 20, categoryId);
-      // Hide rows whose delete is still in progress, so they don't pop back into the list
-      setExpenses(result.items.filter((x) => !pendingRef.current[x.id]));
+      // reload the current page and the page count through the effect
+      setRefreshKey((k) => k + 1);
       resetForm();
     } catch (error) {
       console.log(error);
@@ -202,8 +209,13 @@ function Expenses() {
     try {
       await deleteExpense(expenseId);
       setDelErr("");
-      // remove locally instead of refetching
+      // remove locally for instant feedback
       setExpenses((list) => list.filter((x) => x.id !== expenseId));
+      if (expenses.length === 1 && page > 1) {
+        setPage(page - 1); // that was the last row on this page, step back
+      } else {
+        setRefreshKey((k) => k + 1); // pull in the next row and fix the page count
+      }
     } catch (error) {
       setDelErr("Error occurred while deleting, please try again later");
       console.log(error);
@@ -261,7 +273,10 @@ function Expenses() {
             size="small"
             label="Category"
             value={categoryId}
-            onChange={(e) => setCategoryId(e.target.value)}
+            onChange={(e) => {
+              setCategoryId(e.target.value);
+              setPage(1); // a new filter always starts from page 1
+            }}
             sx={{ minWidth: 160 }}
           >
             <MenuItem value="">All categories</MenuItem>
@@ -466,6 +481,16 @@ function Expenses() {
             setSelected(null);
           }}
         />
+      )}
+
+      {totalPages > 1 && (
+        <Box sx={{ display: "flex", justifyContent: "center", mt: 2 }}>
+          <Pagination
+            count={totalPages}
+            page={page}
+            onChange={(_, p) => setPage(p)}
+          />
+        </Box>
       )}
     </Box>
   );

@@ -17,10 +17,13 @@ import {
   DialogContent,
   DialogTitle,
   Divider,
+  Pagination,
   Typography,
 } from "@mui/material";
 import RecurringForm from "./RecurringForm";
 import Mascot from "../../components/Mascot/Mascot";
+
+const PAGE_SIZE = 10; // rows per page
 
 function formatMoney(value) {
   return "₹" + Number(value || 0).toLocaleString("en-IN");
@@ -103,9 +106,20 @@ function Recurring() {
   const [formOpen, setFormOpen] = useState(false);
   const [selectedId, setSelectedId] = useState(null); // id of the item shown in the details dialog
   const [pending, setPending] = useState({}); // { [id]: "toggle" | "delete" }
+  const [page, setPage] = useState(1);
 
   // Live item for the dialog (not a snapshot), so status updates while it's open
   const selected = recurring.find((r) => r.id === selectedId) || null;
+
+  // Pagination, worked out from the full list on every render.
+  // safePage keeps the page valid, so deleting the last row of the last page
+  // steps back automatically and never leaves an empty page.
+  const totalPages = Math.max(1, Math.ceil(recurring.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const visibleItems = recurring.slice(
+    (safePage - 1) * PAGE_SIZE,
+    safePage * PAGE_SIZE,
+  );
 
   function setBusy(id, action) {
     setPending((p) => ({ ...p, [id]: action }));
@@ -253,7 +267,7 @@ function Recurring() {
 
       {recurring.length > 0 && (
         <Card>
-          {recurring.map((r, i) => {
+          {visibleItems.map((r, i) => {
             const action = pending[r.id]; // undefined | "toggle" | "delete"
             const isDeleting = action === "delete";
             const isToggling = action === "toggle";
@@ -329,6 +343,16 @@ function Recurring() {
             );
           })}
         </Card>
+      )}
+
+      {totalPages > 1 && (
+        <Box sx={{ display: "flex", justifyContent: "center", mt: 2 }}>
+          <Pagination
+            count={totalPages}
+            page={safePage}
+            onChange={(_, p) => setPage(p)}
+          />
+        </Box>
       )}
 
       <RecurringForm
