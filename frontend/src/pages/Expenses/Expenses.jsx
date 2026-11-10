@@ -94,6 +94,7 @@ function Expenses() {
   const [notes, setNotes] = useState("");
   const [formCategoryId, setFormCategoryId] = useState(""); // for the form
   const [formErr, setFormErr] = useState("");
+  const [formSubmit, setFormSubmit] = useState(false);
   const [delErr, setDelErr] = useState("");
   const [editingId, setEditingId] = useState(null);
   const [exportErr, setExportErr] = useState("");
@@ -123,10 +124,12 @@ function Expenses() {
     setDate("");
     setNotes("");
     setFormErr("");
+    setFormSubmit(false);
   }
 
   // for creating and updating an expense
   async function handleSubmit() {
+    setFormSubmit(true);
     try {
       if (editingId) {
         await updateExpense(
@@ -146,6 +149,8 @@ function Expenses() {
     } catch (error) {
       console.log(error);
       setFormErr("Something went wrong while saving the expense");
+    } finally {
+      setFormSubmit(false);
     }
   }
 
@@ -376,9 +381,21 @@ function Expenses() {
           </Box>
         </DialogContent>
         <DialogActions>
-          <Button onClick={resetForm}>Cancel</Button>
-          <Button variant="contained" onClick={handleSubmit}>
-            {editingId ? "Update" : "Add expense"}
+          <Button onClick={resetForm} disabled={formSubmit}>
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleSubmit}
+            disabled={formSubmit}
+          >
+            {formSubmit
+              ? editingId
+                ? "Saving..."
+                : "Adding..."
+              : editingId
+                ? "Update"
+                : "Add expense"}
           </Button>
         </DialogActions>
       </Dialog>

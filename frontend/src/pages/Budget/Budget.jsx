@@ -145,6 +145,7 @@ function Budget() {
   const [formCategoryId, setFormCategoryId] = useState("");
   const [monthlyLimit, setMonthlyLimit] = useState("");
   const [formErr, setFormErr] = useState("");
+  const [formSubmit, setFormSubmit] = useState(false);
 
   useEffect(() => {
     getBudgets()
@@ -167,6 +168,7 @@ function Budget() {
     setFormErr("");
     setMonthlyLimit("");
     setFormCategoryId("");
+    setFormSubmit(false);
   }
 
   function handleEdit(bgt) {
@@ -177,6 +179,7 @@ function Budget() {
   }
 
   async function handleSubmit() {
+    setFormSubmit(true);
     if (!formCategoryId || !monthlyLimit) {
       setFormErr("Choose a category and enter a limit");
       return;
@@ -188,6 +191,8 @@ function Budget() {
       resetForm();
     } catch (error) {
       setFormErr("Couldn't save your budget, please try again later");
+    } finally {
+      setFormSubmit(false);
     }
   }
 
@@ -385,9 +390,21 @@ function Budget() {
           </Box>
         </DialogContent>
         <DialogActions>
-          <Button onClick={resetForm}>Cancel</Button>
-          <Button variant="contained" onClick={handleSubmit}>
-            {editingId ? "Update" : "Add budget"}
+          <Button onClick={resetForm} disabled={formSubmit}>
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleSubmit}
+            disabled={formSubmit}
+          >
+            {formSubmit
+              ? editingId
+                ? "Saving..."
+                : "Adding..."
+              : editingId
+                ? "Edit"
+                : "Add budget"}
           </Button>
         </DialogActions>
       </Dialog>

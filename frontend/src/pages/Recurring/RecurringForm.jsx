@@ -25,6 +25,7 @@ function RecurringForm({ open, onClose, onCreated }) {
   const [categories, setCategories] = useState([]);
   const [err, setErr] = useState("");
   const [catErr, setCatErr] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     getCategories()
@@ -35,6 +36,7 @@ function RecurringForm({ open, onClose, onCreated }) {
   }, []);
 
   async function handleSubmit() {
+    setSubmitting(true);
     try {
       await createRecurring(
         title,
@@ -58,6 +60,8 @@ function RecurringForm({ open, onClose, onCreated }) {
         "An error occurred while creating or refreshing recurring expenses",
       );
       console.error(error);
+    } finally {
+      setSubmitting(false);
     }
   }
 
@@ -129,8 +133,12 @@ function RecurringForm({ open, onClose, onCreated }) {
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose}>Cancel</Button>
-        <Button variant="contained" onClick={handleSubmit}>
-          Add
+        <Button
+          variant="contained"
+          onClick={handleSubmit}
+          disabled={submitting}
+        >
+          {submitting ? "Adding..." : "Add"}
         </Button>
       </DialogActions>
     </Dialog>
