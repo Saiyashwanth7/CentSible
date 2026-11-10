@@ -207,7 +207,7 @@ function Recurring() {
 
       {recurring.length > 0 && (
         <Card>
-          {recurring.map((r, i) => {
+          {/* {recurring.map((r, i) => {
             const isDeleting = deletingId === r.id;
             const isToggling = togglingId === r.id;
             const isBusy = isDeleting || isToggling;
@@ -248,6 +248,80 @@ function Recurring() {
                     color={r.active ? "primary" : "default"}
                     variant={r.active ? "filled" : "outlined"}
                   />
+                  <Button
+                    size="small"
+                    disabled={isBusy}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleToggle(r);
+                    }}
+                  >
+                    {isToggling
+                      ? r.active
+                        ? "Pausing..."
+                        : "Resuming..."
+                      : r.active
+                        ? "Pause"
+                        : "Resume"}
+                  </Button>
+                  <Button
+                    size="small"
+                    color="error"
+                    disabled={isBusy}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDelete(r);
+                    }}
+                  >
+                    {isDeleting ? "Deleting..." : "Delete"}
+                  </Button>
+                </Box>
+              </Box>
+            );
+          })} */}
+          {recurring.map((r, i) => {
+            const isDeleting = deletingId === r.id;
+            const isToggling = togglingId === r.id;
+            const isBusy = isDeleting || isToggling;
+
+            return (
+              <Box key={r.id}>
+                {i > 0 && <Divider />}
+                <Box
+                  onClick={() => {
+                    if (isBusy) return;
+                    setSelected(r);
+                  }}
+                  sx={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 2,
+                    px: 3,
+                    py: 2,
+                    flexWrap: "wrap",
+                    opacity: isBusy ? 0.5 : 1,
+                    cursor: isBusy ? "default" : "pointer",
+                    "&:hover": {
+                      bgcolor: isBusy ? "transparent" : "action.hover",
+                    },
+                  }}
+                >
+                  <Box sx={{ flex: 1, minWidth: 160 }}>
+                    <Typography sx={{ fontWeight: 600 }}>{r.title}</Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      {capitalize(r.frequency)} · next: {r.next_date}
+                    </Typography>
+                  </Box>
+                  <Typography sx={{ fontWeight: 700 }}>
+                    {formatMoney(r.amount)}
+                  </Typography>
+                  <Chip
+                    size="small"
+                    label={r.active ? "Active" : "Paused"}
+                    color={r.active ? "primary" : "default"}
+                    variant={r.active ? "filled" : "outlined"}
+                  />
+
                   <Button
                     size="small"
                     disabled={isBusy}
