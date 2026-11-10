@@ -136,10 +136,10 @@ function Budget() {
   const [budgets, setBudgets] = useState([]);
   const [categories, setCategories] = useState([]);
   const [err, setErr] = useState("");
+  const [catErr, setCatErr] = useState("");
   const [delErr, setDelErr] = useState("");
   const [selected, setSelected] = useState(null); // budget shown in the details dialog
-  const [itemDisable, setitemDisable] = useState(null);
-  const [deleteId, setDeleteId] = useState(null);
+  const [deletingId, setDeletingId] = useState(null); // id of the row being deleted
 
   // form (dialog) state
   const [formOpen, setFormOpen] = useState(false);
@@ -160,8 +160,13 @@ function Budget() {
 
   useEffect(() => {
     getCategories()
-      .then((data) => setCategories(data))
-      .catch(() => setErr("Couldn't load categories, please try again later"));
+      .then((data) => {
+        setCategories(data);
+        setCatErr("");
+      })
+      .catch(() =>
+        setCatErr("Couldn't load categories, please try again later"),
+      );
   }, []);
 
   function resetForm() {
@@ -178,14 +183,16 @@ function Budget() {
     setEditingId(bgt.id);
     setFormCategoryId(bgt.category_id);
     setMonthlyLimit(bgt.monthly_limit);
+    setFormErr("");
   }
 
   async function handleSubmit() {
-    setFormSubmit(true);
+    // validate first, so the form never gets stuck on "Adding..."
     if (!formCategoryId || !monthlyLimit) {
       setFormErr("Choose a category and enter a limit");
       return;
     }
+    setFormSubmit(true);
     try {
       await upsertBudget(formCategoryId, Number(monthlyLimit));
       const result = await getBudgets();
@@ -193,13 +200,14 @@ function Budget() {
       resetForm();
     } catch (error) {
       setFormErr("Couldn't save your budget, please try again later");
+      console.error(error);
     } finally {
       setFormSubmit(false);
     }
   }
 
   async function handleDelete(bgtId) {
-    setDeleteId(bgtId);
+    setDeletingId(bgtId);
     try {
       await deleteBudget(bgtId);
       const result = await getBudgets();
@@ -207,8 +215,9 @@ function Budget() {
       setDelErr("");
     } catch (error) {
       setDelErr("Couldn't delete the budget, please try again later");
+      console.error(error);
     } finally {
-      setDeleteId(null);
+      setDeletingId(null);
     }
   }
 
@@ -249,7 +258,13 @@ function Budget() {
         }}
       >
         <Typography variant="h5">Your Budgets</Typography>
-        <Button variant="contained" onClick={() => setFormOpen(true)}>
+        <Button
+          variant="contained"
+          onClick={(e) => {
+            e.currentTarget.blur();
+            setFormOpen(true);
+          }}
+        >
           Add budget
         </Button>
       </Box>
@@ -257,6 +272,11 @@ function Budget() {
       {err && (
         <Alert severity="error" sx={{ mb: 2 }}>
           {err}
+        </Alert>
+      )}
+      {catErr && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {catErr}
         </Alert>
       )}
       {delErr && (
@@ -278,14 +298,14 @@ function Budget() {
       {budgets.length > 0 && (
         <Card>
           {budgets.map((bgt, i) => {
-            const isDeleting = deleteId === bgt.id;
+            const isDeleting = deletingId === bgt.id;
             return (
               <Box key={bgt.id}>
                 {i > 0 && <Divider />}
                 <Box
                   onClick={() => {
                     if (isDeleting) return;
-                    setSelected(exp);
+                    setSelected(bgt);
                   }}
                   sx={{
                     display: "flex",
@@ -300,79 +320,67 @@ function Budget() {
                     },
                   }}
                 >
-                  <Box
-                    onClick={() => setSelected(bgt)}
-                    sx={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 2,
-                      px: 3,
-                      py: 2,
-                      cursor: "pointer",
-                      "&:hover": { bgcolor: "action.hover" },
-                    }}
-                  >
-                    <Box sx={{ flex: 1, minWidth: 0 }}>
-                      <Box
-                        sx={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          gap: 2,
-                          mb: 1,
-                        }}
-                      >
-                        <Typography sx={{ fontWeight: 600 }} noWrap>
-                          {bgt.category}
-                        </Typography>
-                        <Typography variant="body2" color="text.secondary">
-                          {formatMoney(bgt.spent) +
-                            " of " +
-                            formatMoney(bgt.monthly_limit)}
-                        </Typography>
-                      </Box>
-
-                      <LinearProgress
-                        variant="determinate"
-                        value={Math.min(usedPercent(bgt), 100)}
-                        color={budgetColor(usedPercent(bgt))}
-                        sx={{ height: 10, borderRadius: 999 }}
-                      />
-
-                      <Typography
-                        variant="caption"
-                        color="text.secondary"
-                        sx={{ display: "block", mt: 0.5 }}
-                      >
-                        {Number(bgt.spent) > Number(bgt.monthly_limit)
-                          ? "Over budget by " +
-                            formatMoney(
-                              Number(bgt.spent) - Number(bgt.monthly_limit),
-                            )
-                          : usedPercent(bgt) + "% used"}
+                  <Box sx={{ flex: 1, minWidth: 0 }}>
+                    <Box
+                      sx={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        gap: 2,
+                        mb: 1,
+                      }}
+                    >
+                      <Typography sx={{ fontWeight: 600 }} noWrap>
+                        {bgt.category}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        {formatMoney(bgt.spent) +
+                          " of " +
+                          formatMoney(bgt.monthly_limit)}
                       </Typography>
                     </Box>
 
-                    <Button
-                      size="small"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleEdit(bgt);
-                      }}
+                    <LinearProgress
+                      variant="determinate"
+                      value={Math.min(usedPercent(bgt), 100)}
+                      color={budgetColor(usedPercent(bgt))}
+                      sx={{ height: 10, borderRadius: 999 }}
+                    />
+
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      sx={{ display: "block", mt: 0.5 }}
                     >
-                      Edit
-                    </Button>
-                    <Button
-                      size="small"
-                      color="error"
-                      disabled={isDeleting}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDelete(bgt.id);
-                      }}
-                    >
-                      {isDeleting ? "Deleting..." : "Delete"}
-                    </Button>
+                      {Number(bgt.spent) > Number(bgt.monthly_limit)
+                        ? "Over budget by " +
+                          formatMoney(
+                            Number(bgt.spent) - Number(bgt.monthly_limit),
+                          )
+                        : usedPercent(bgt) + "% used"}
+                    </Typography>
                   </Box>
+
+                  <Button
+                    size="small"
+                    disabled={isDeleting}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleEdit(bgt);
+                    }}
+                  >
+                    Edit
+                  </Button>
+                  <Button
+                    size="small"
+                    color="error"
+                    disabled={isDeleting}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDelete(bgt.id);
+                    }}
+                  >
+                    {isDeleting ? "Deleting..." : "Delete"}
+                  </Button>
                 </Box>
               </Box>
             );
