@@ -138,6 +138,8 @@ function Budget() {
   const [err, setErr] = useState("");
   const [delErr, setDelErr] = useState("");
   const [selected, setSelected] = useState(null); // budget shown in the details dialog
+  const [itemDisable, setitemDisable] = useState(null);
+  const [deleteId, setDeleteId] = useState(null);
 
   // form (dialog) state
   const [formOpen, setFormOpen] = useState(false);
@@ -197,6 +199,7 @@ function Budget() {
   }
 
   async function handleDelete(bgtId) {
+    setDeleteId(bgtId);
     try {
       await deleteBudget(bgtId);
       const result = await getBudgets();
@@ -204,6 +207,8 @@ function Budget() {
       setDelErr("");
     } catch (error) {
       setDelErr("Couldn't delete the budget, please try again later");
+    } finally {
+      setDeleteId(null);
     }
   }
 
@@ -272,83 +277,106 @@ function Budget() {
 
       {budgets.length > 0 && (
         <Card>
-          {budgets.map((bgt, i) => (
-            <Box key={bgt.id}>
-              {i > 0 && <Divider />}
-              <Box
-                onClick={() => setSelected(bgt)}
-                sx={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 2,
-                  px: 3,
-                  py: 2,
-                  cursor: "pointer",
-                  "&:hover": { bgcolor: "action.hover" },
-                }}
-              >
-                <Box sx={{ flex: 1, minWidth: 0 }}>
+          {budgets.map((bgt, i) => {
+            const isDeleting = deleteId === bgt.id;
+            return (
+              <Box key={bgt.id}>
+                {i > 0 && <Divider />}
+                <Box
+                  onClick={() => {
+                    if (isDeleting) return;
+                    setSelected(exp);
+                  }}
+                  sx={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 2,
+                    px: 3,
+                    py: 2,
+                    opacity: isDeleting ? 0.5 : 1,
+                    cursor: isDeleting ? "default" : "pointer",
+                    "&:hover": {
+                      bgcolor: isDeleting ? "transparent" : "action.hover",
+                    },
+                  }}
+                >
                   <Box
+                    onClick={() => setSelected(bgt)}
                     sx={{
                       display: "flex",
-                      justifyContent: "space-between",
+                      alignItems: "center",
                       gap: 2,
-                      mb: 1,
+                      px: 3,
+                      py: 2,
+                      cursor: "pointer",
+                      "&:hover": { bgcolor: "action.hover" },
                     }}
                   >
-                    <Typography sx={{ fontWeight: 600 }} noWrap>
-                      {bgt.category}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      {formatMoney(bgt.spent) +
-                        " of " +
-                        formatMoney(bgt.monthly_limit)}
-                    </Typography>
+                    <Box sx={{ flex: 1, minWidth: 0 }}>
+                      <Box
+                        sx={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          gap: 2,
+                          mb: 1,
+                        }}
+                      >
+                        <Typography sx={{ fontWeight: 600 }} noWrap>
+                          {bgt.category}
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          {formatMoney(bgt.spent) +
+                            " of " +
+                            formatMoney(bgt.monthly_limit)}
+                        </Typography>
+                      </Box>
+
+                      <LinearProgress
+                        variant="determinate"
+                        value={Math.min(usedPercent(bgt), 100)}
+                        color={budgetColor(usedPercent(bgt))}
+                        sx={{ height: 10, borderRadius: 999 }}
+                      />
+
+                      <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        sx={{ display: "block", mt: 0.5 }}
+                      >
+                        {Number(bgt.spent) > Number(bgt.monthly_limit)
+                          ? "Over budget by " +
+                            formatMoney(
+                              Number(bgt.spent) - Number(bgt.monthly_limit),
+                            )
+                          : usedPercent(bgt) + "% used"}
+                      </Typography>
+                    </Box>
+
+                    <Button
+                      size="small"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleEdit(bgt);
+                      }}
+                    >
+                      Edit
+                    </Button>
+                    <Button
+                      size="small"
+                      color="error"
+                      disabled={isDeleting}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDelete(bgt.id);
+                      }}
+                    >
+                      {isDeleting ? "Deleting..." : "Delete"}
+                    </Button>
                   </Box>
-
-                  <LinearProgress
-                    variant="determinate"
-                    value={Math.min(usedPercent(bgt), 100)}
-                    color={budgetColor(usedPercent(bgt))}
-                    sx={{ height: 10, borderRadius: 999 }}
-                  />
-
-                  <Typography
-                    variant="caption"
-                    color="text.secondary"
-                    sx={{ display: "block", mt: 0.5 }}
-                  >
-                    {Number(bgt.spent) > Number(bgt.monthly_limit)
-                      ? "Over budget by " +
-                        formatMoney(
-                          Number(bgt.spent) - Number(bgt.monthly_limit),
-                        )
-                      : usedPercent(bgt) + "% used"}
-                  </Typography>
                 </Box>
-
-                <Button
-                  size="small"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleEdit(bgt);
-                  }}
-                >
-                  Edit
-                </Button>
-                <Button
-                  size="small"
-                  color="error"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleDelete(bgt.id);
-                  }}
-                >
-                  Delete
-                </Button>
               </Box>
-            </Box>
-          ))}
+            );
+          })}
         </Card>
       )}
 

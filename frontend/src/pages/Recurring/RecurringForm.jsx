@@ -29,13 +29,39 @@ function RecurringForm({ open, onClose, onCreated }) {
 
   useEffect(() => {
     getCategories()
-      .then((data) => setCategories(data))
+      .then((data) => {
+        setCategories(data);
+        setCatErr("");
+      })
       .catch(() => {
         setCatErr("Could not import category list, please try again later");
       });
   }, []);
 
+  // clears every field and the form error
+  function resetForm() {
+    setTitle("");
+    setAmount("");
+    setCategoryId("");
+    setNotes("");
+    setFrequency("monthly");
+    setStartDate("");
+    setErr("");
+  }
+
+  // used for the Cancel button and for clicking outside the dialog
+  function handleCancel() {
+    if (submitting) return; // don't close while a save is in progress
+    resetForm();
+    onClose();
+  }
+
   async function handleSubmit() {
+    if (!title || !amount || !categoryId || !startDate) {
+      setErr("Please fill in title, amount, category and start date");
+      return;
+    }
+
     setSubmitting(true);
     try {
       await createRecurring(
@@ -46,13 +72,7 @@ function RecurringForm({ open, onClose, onCreated }) {
         frequency,
         startDate,
       );
-      setErr("");
-      setTitle("");
-      setAmount("");
-      setCategoryId("");
-      setNotes("");
-      setFrequency("monthly");
-      setStartDate("");
+      resetForm();
       await onCreated();
       onClose(); // close the dialog after a successful save
     } catch (error) {
@@ -66,7 +86,7 @@ function RecurringForm({ open, onClose, onCreated }) {
   }
 
   return (
-    <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
+    <Dialog open={open} onClose={handleCancel} fullWidth maxWidth="sm">
       <DialogTitle>Add recurring expense</DialogTitle>
       <DialogContent>
         <Box sx={{ display: "flex", flexDirection: "column", gap: 2, mt: 1 }}>
@@ -132,7 +152,7 @@ function RecurringForm({ open, onClose, onCreated }) {
         </Box>
       </DialogContent>
       <DialogActions>
-        <Button onClick={resetForm} disabled={formSubmit}>
+        <Button onClick={handleCancel} disabled={submitting}>
           Cancel
         </Button>
         <Button

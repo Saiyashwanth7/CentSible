@@ -88,11 +88,13 @@ function Recurring() {
   const [delErr, setDelErr] = useState("");
   const [formOpen, setFormOpen] = useState(false);
   const [selected, setSelected] = useState(null); // item shown in the details dialog
+  const [deletingId, setDeletingId] = useState(null); // id of the row being deleted
 
   async function loadRecurring() {
     try {
       const data = await getRecurringList();
       setRecurring(data);
+      setErr(""); // clear the load error only when the load succeeds
     } catch (error) {
       setErr("Something went wrong while loading recurring expenses");
       console.error(error);
@@ -108,22 +110,25 @@ function Recurring() {
   async function handleToggle(r) {
     try {
       await updateRecurring(r.id, { active: !r.active });
-      await loadRecurring();
       setToggleErr("");
-      setErr("");
+      await loadRecurring();
     } catch (error) {
       setToggleErr("Something went wrong, please try again later");
+      console.error(error);
     }
   }
 
   async function handleDelete(r) {
+    setDeletingId(r.id);
     try {
       await deleteRecurring(r.id);
-      await loadRecurring();
-      setErr("");
       setDelErr("");
+      await loadRecurring();
     } catch (error) {
       setDelErr("Couldn't delete this now, please try again later");
+      console.error(error);
+    } finally {
+      setDeletingId(null);
     }
   }
 
@@ -158,7 +163,13 @@ function Recurring() {
         }}
       >
         <Typography variant="h5">Your schedule</Typography>
-        <Button variant="contained" onClick={() => setFormOpen(true)}>
+        <Button
+          variant="contained"
+          onClick={(e) => {
+            e.currentTarget.blur();
+            setFormOpen(true);
+          }}
+        >
           Add recurring
         </Button>
       </Box>
@@ -192,59 +203,70 @@ function Recurring() {
 
       {recurring.length > 0 && (
         <Card>
-          {recurring.map((r, i) => (
-            <Box key={r.id}>
-              {i > 0 && <Divider />}
-              <Box
-                onClick={() => setSelected(r)}
-                sx={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 2,
-                  px: 3,
-                  py: 2,
-                  flexWrap: "wrap",
-                  cursor: "pointer",
-                  "&:hover": { bgcolor: "action.hover" },
-                }}
-              >
-                <Box sx={{ flex: 1, minWidth: 160 }}>
-                  <Typography sx={{ fontWeight: 600 }}>{r.title}</Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    {r.frequency} · next: {r.next_date}
+          {recurring.map((r, i) => {
+            const isDeleting = deletingId === r.id;
+            return (
+              <Box key={r.id}>
+                {i > 0 && <Divider />}
+                <Box
+                  onClick={() => {
+                    if (isDeleting) return;
+                    setSelected(r);
+                  }}
+                  sx={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 2,
+                    px: 3,
+                    py: 2,
+                    flexWrap: "wrap",
+                    opacity: isDeleting ? 0.5 : 1,
+                    cursor: isDeleting ? "default" : "pointer",
+                    "&:hover": {
+                      bgcolor: isDeleting ? "transparent" : "action.hover",
+                    },
+                  }}
+                >
+                  <Box sx={{ flex: 1, minWidth: 160 }}>
+                    <Typography sx={{ fontWeight: 600 }}>{r.title}</Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      {capitalize(r.frequency)} · next: {r.next_date}
+                    </Typography>
+                  </Box>
+                  <Typography sx={{ fontWeight: 700 }}>
+                    {formatMoney(r.amount)}
                   </Typography>
+                  <Chip
+                    size="small"
+                    label={r.active ? "Active" : "Paused"}
+                    color={r.active ? "primary" : "default"}
+                    variant={r.active ? "filled" : "outlined"}
+                  />
+                  <Button
+                    size="small"
+                    disabled={isDeleting}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleToggle(r);
+                    }}
+                  >
+                    {r.active ? "Pause" : "Resume"}
+                  </Button>
+                  <Button
+                    size="small"
+                    color="error"
+                    disabled={isDeleting}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDelete(r);
+                    }}
+                  >
+                    {isDeleting ? "Deleting..." : "Delete"}
+                  </Button>
                 </Box>
-                <Typography sx={{ fontWeight: 700 }}>
-                  {formatMoney(r.amount)}
-                </Typography>
-                <Chip
-                  size="small"
-                  label={r.active ? "Active" : "Paused"}
-                  color={r.active ? "primary" : "default"}
-                  variant={r.active ? "filled" : "outlined"}
-                />
-                <Button
-                  size="small"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleToggle(r);
-                  }}
-                >
-                  {r.active ? "Pause" : "Resume"}
-                </Button>
-                <Button
-                  size="small"
-                  color="error"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleDelete(r);
-                  }}
-                >
-                  Delete
-                </Button>
               </Box>
-            </Box>
-          ))}
+            );
+          })}
         </Card>
       )}
 

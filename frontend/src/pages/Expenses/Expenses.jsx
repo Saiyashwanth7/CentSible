@@ -100,6 +100,8 @@ function Expenses() {
   const [exportErr, setExportErr] = useState("");
   const [formOpen, setFormOpen] = useState(false);
   const [selected, setSelected] = useState(null);
+  const [deletingId, setDeletingId] = useState(null);
+  const [itemDisable, setitemDisable] = useState(false);
   // These below useEffect functions get triggered by the react app instead of any interactive UI tools
   useEffect(() => {
     getExpenses(1, 20, categoryId)
@@ -167,6 +169,7 @@ function Expenses() {
 
   // for deleting an expense
   async function handleDelete(expenseId) {
+    setDeletingId(expenseId);
     try {
       await deleteExpense(expenseId);
       const result = await getExpenses(1, 20, categoryId);
@@ -175,6 +178,8 @@ function Expenses() {
     } catch (error) {
       setDelErr("Error occurred while deleting, please try again later");
       console.log(error);
+    } finally {
+      setDeletingId(null);
     }
   }
 
@@ -240,7 +245,13 @@ function Expenses() {
           <Button variant="outlined" onClick={handleExport}>
             Export CSV
           </Button>
-          <Button variant="contained" onClick={() => setFormOpen(true)}>
+          <Button
+            variant="contained"
+            onClick={(e) => {
+              e.currentTarget.blur();
+              setFormOpen(true);
+            }}
+          >
             Add expense
           </Button>
         </Stack>
@@ -275,55 +286,67 @@ function Expenses() {
 
       {expenses.length > 0 && (
         <Card>
-          {expenses.map((exp, i) => (
-            <Box key={exp.id}>
-              {i > 0 && <Divider />}
-              <Box
-                onClick={() => setSelected(exp)}
-                sx={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 2,
-                  px: 3,
-                  py: 2,
-                  cursor: "pointer",
-                  "&:hover": { bgcolor: "action.hover" },
-                }}
-              >
-                <Box sx={{ flex: 1, minWidth: 0 }}>
-                  <Typography sx={{ fontWeight: 600 }} noWrap>
-                    {exp.title}
+          {expenses.map((exp, i) => {
+            const isDeleting = deletingId === exp.id;
+
+            return (
+              <Box key={exp.id}>
+                {i > 0 && <Divider />}
+                <Box
+                  onClick={() => {
+                    if (isDeleting) return;
+                    setSelected(exp);
+                  }}
+                  sx={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 2,
+                    px: 3,
+                    py: 2,
+                    opacity: isDeleting ? 0.5 : 1,
+                    cursor: isDeleting ? "default" : "pointer",
+                    "&:hover": {
+                      bgcolor: isDeleting ? "transparent" : "action.hover",
+                    },
+                  }}
+                >
+                  <Box sx={{ flex: 1, minWidth: 0 }}>
+                    <Typography sx={{ fontWeight: 600 }} noWrap>
+                      {exp.title}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary" noWrap>
+                      {exp.date}
+                      {exp.category?.name ? " · " + exp.category.name : ""}
+                    </Typography>
+                  </Box>
+                  <Typography sx={{ fontWeight: 700 }}>
+                    {"₹" + Number(exp.amount).toLocaleString("en-IN")}
                   </Typography>
-                  <Typography variant="body2" color="text.secondary" noWrap>
-                    {exp.date}
-                    {exp.category?.name ? " · " + exp.category.name : ""}
-                  </Typography>
+                  <Button
+                    size="small"
+                    disabled={isDeleting}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleEdit(exp);
+                    }}
+                  >
+                    Edit
+                  </Button>
+                  <Button
+                    size="small"
+                    color="error"
+                    disabled={isDeleting}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDelete(exp.id);
+                    }}
+                  >
+                    {isDeleting ? "Deleting..." : "Delete"}
+                  </Button>
                 </Box>
-                <Typography sx={{ fontWeight: 700 }}>
-                  {"₹" + Number(exp.amount).toLocaleString("en-IN")}
-                </Typography>
-                <Button
-                  size="small"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleEdit(exp);
-                  }}
-                >
-                  Edit
-                </Button>
-                <Button
-                  size="small"
-                  color="error"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleDelete(exp.id);
-                  }}
-                >
-                  Delete
-                </Button>
               </Box>
-            </Box>
-          ))}
+            );
+          })}
         </Card>
       )}
 
