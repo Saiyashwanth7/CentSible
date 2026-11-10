@@ -47,7 +47,21 @@ function DetailRow({ label, value }) {
   );
 }
 
-function RecurringDetailsDialog({ item, onClose, onToggle, onDelete }) {
+function RecurringDetailsDialog({ item, action, onClose, onToggle, onDelete }) {
+  const busy = Boolean(action);
+  const isToggling = action === "toggle";
+  const isDeleting = action === "delete";
+
+  // item.active is already the optimistic (new) value while the request is pending,
+  // so active = true means we are resuming, active = false means we are pausing
+  const toggleLabel = isToggling
+    ? item.active
+      ? "Resuming..."
+      : "Pausing..."
+    : item.active
+      ? "Pause"
+      : "Resume";
+
   return (
     <Dialog open onClose={onClose} fullWidth maxWidth="xs">
       <DialogTitle>{item.title}</DialogTitle>
@@ -67,13 +81,13 @@ function RecurringDetailsDialog({ item, onClose, onToggle, onDelete }) {
         <DetailRow label="Notes" value={item.notes || "No notes"} />
       </DialogContent>
       <DialogActions>
-        <Button color="error" onClick={onDelete}>
-          Delete
+        <Button color="error" disabled={busy} onClick={onDelete}>
+          {isDeleting ? "Deleting..." : "Delete"}
         </Button>
         <Box sx={{ flex: 1 }} />
         <Button onClick={onClose}>Close</Button>
-        <Button variant="contained" onClick={onToggle}>
-          {item.active ? "Pause" : "Resume"}
+        <Button variant="contained" disabled={busy} onClick={onToggle}>
+          {toggleLabel}
         </Button>
       </DialogActions>
     </Dialog>
@@ -87,9 +101,22 @@ function Recurring() {
   const [toggleErr, setToggleErr] = useState("");
   const [delErr, setDelErr] = useState("");
   const [formOpen, setFormOpen] = useState(false);
-  const [selected, setSelected] = useState(null); // item shown in the details dialog
-  const [deletingId, setDeletingId] = useState(null); // id of the row being deleted
-  const [togglingId, setTogglingId] = useState(null); // id of the row being paused/resumed
+  const [selectedId, setSelectedId] = useState(null); // id of the item shown in the details dialog
+  const [pending, setPending] = useState({}); // { [id]: "toggle" | "delete" }
+
+  // Live item for the dialog (not a snapshot), so status updates while it's open
+  const selected = recurring.find((r) => r.id === selectedId) || null;
+
+  function setBusy(id, action) {
+    setPending((p) => ({ ...p, [id]: action }));
+  }
+
+  function clearBusy(id) {
+    setPending((p) => {
+      const { [id]: _removed, ...rest } = p;
+      return rest;
+    });
+  }
 
   async function loadRecurring() {
     try {
@@ -109,30 +136,49 @@ function Recurring() {
   }, []);
 
   async function handleToggle(r) {
-    setTogglingId(r.id);
+    if (pending[r.id]) return; // guard against double clicks on the same row
+    const prevActive = r.active;
+    setBusy(r.id, "toggle");
+
+    // Optimistic update: UI changes immediately
+    setRecurring((list) =>
+      list.map((x) => (x.id === r.id ? { ...x, active: !prevActive } : x)),
+    );
+
     try {
-      await updateRecurring(r.id, { active: !r.active });
+      const updated = await updateRecurring(r.id, { active: !prevActive });
+      // If the backend returns the updated item (e.g. recalculated next_date), merge it
+      if (updated && typeof updated === "object" && updated.id === r.id) {
+        setRecurring((list) =>
+          list.map((x) => (x.id === r.id ? { ...x, ...updated } : x)),
+        );
+      }
       setToggleErr("");
-      await loadRecurring();
     } catch (error) {
+      // Roll back on failure
+      setRecurring((list) =>
+        list.map((x) => (x.id === r.id ? { ...x, active: prevActive } : x)),
+      );
       setToggleErr("Something went wrong, please try again later");
       console.error(error);
     } finally {
-      setTogglingId(null);
+      clearBusy(r.id);
     }
   }
 
   async function handleDelete(r) {
-    setDeletingId(r.id);
+    if (pending[r.id]) return;
+    setBusy(r.id, "delete");
     try {
       await deleteRecurring(r.id);
       setDelErr("");
-      await loadRecurring();
+      // Remove locally instead of refetching
+      setRecurring((list) => list.filter((x) => x.id !== r.id));
     } catch (error) {
       setDelErr("Couldn't delete this now, please try again later");
       console.error(error);
     } finally {
-      setDeletingId(null);
+      clearBusy(r.id);
     }
   }
 
@@ -207,17 +253,19 @@ function Recurring() {
 
       {recurring.length > 0 && (
         <Card>
-          {/* {recurring.map((r, i) => {
-            const isDeleting = deletingId === r.id;
-            const isToggling = togglingId === r.id;
-            const isBusy = isDeleting || isToggling;
+          {recurring.map((r, i) => {
+            const action = pending[r.id]; // undefined | "toggle" | "delete"
+            const isDeleting = action === "delete";
+            const isToggling = action === "toggle";
+            const isBusy = Boolean(action);
+
             return (
               <Box key={r.id}>
                 {i > 0 && <Divider />}
                 <Box
                   onClick={() => {
                     if (isDeleting) return;
-                    setSelected(r);
+                    setSelectedId(r.id);
                   }}
                   sx={{
                     display: "flex",
@@ -248,79 +296,6 @@ function Recurring() {
                     color={r.active ? "primary" : "default"}
                     variant={r.active ? "filled" : "outlined"}
                   />
-                  <Button
-                    size="small"
-                    disabled={isBusy}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleToggle(r);
-                    }}
-                  >
-                    {isToggling
-                      ? r.active
-                        ? "Pausing..."
-                        : "Resuming..."
-                      : r.active
-                        ? "Pause"
-                        : "Resume"}
-                  </Button>
-                  <Button
-                    size="small"
-                    color="error"
-                    disabled={isBusy}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDelete(r);
-                    }}
-                  >
-                    {isDeleting ? "Deleting..." : "Delete"}
-                  </Button>
-                </Box>
-              </Box>
-            );
-          })} */}
-          {recurring.map((r, i) => {
-            const isDeleting = deletingId === r.id;
-            const isToggling = togglingId === r.id;
-            const isBusy = isDeleting || isToggling;
-
-            return (
-              <Box key={r.id}>
-                {i > 0 && <Divider />}
-                <Box
-                  onClick={() => {
-                    if (isBusy) return;
-                    setSelected(r);
-                  }}
-                  sx={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 2,
-                    px: 3,
-                    py: 2,
-                    flexWrap: "wrap",
-                    opacity: isBusy ? 0.5 : 1,
-                    cursor: isBusy ? "default" : "pointer",
-                    "&:hover": {
-                      bgcolor: isBusy ? "transparent" : "action.hover",
-                    },
-                  }}
-                >
-                  <Box sx={{ flex: 1, minWidth: 160 }}>
-                    <Typography sx={{ fontWeight: 600 }}>{r.title}</Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      {capitalize(r.frequency)} · next: {r.next_date}
-                    </Typography>
-                  </Box>
-                  <Typography sx={{ fontWeight: 700 }}>
-                    {formatMoney(r.amount)}
-                  </Typography>
-                  <Chip
-                    size="small"
-                    label={r.active ? "Active" : "Paused"}
-                    color={r.active ? "primary" : "default"}
-                    variant={r.active ? "filled" : "outlined"}
-                  />
 
                   <Button
                     size="small"
@@ -332,8 +307,8 @@ function Recurring() {
                   >
                     {isToggling
                       ? r.active
-                        ? "Pausing..."
-                        : "Resuming..."
+                        ? "Resuming..."
+                        : "Pausing..."
                       : r.active
                         ? "Pause"
                         : "Resume"}
@@ -366,14 +341,12 @@ function Recurring() {
       {selected && (
         <RecurringDetailsDialog
           item={selected}
-          onClose={() => setSelected(null)}
-          onToggle={() => {
-            handleToggle(selected);
-            setSelected(null);
-          }}
+          action={pending[selected.id]}
+          onClose={() => setSelectedId(null)}
+          onToggle={() => handleToggle(selected)} // dialog open ne untundhi, status live ga marutundhi
           onDelete={() => {
             handleDelete(selected);
-            setSelected(null);
+            setSelectedId(null);
           }}
         />
       )}
