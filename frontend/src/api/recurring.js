@@ -42,6 +42,9 @@ export function updateRecurring(recurringId, changes) {
   });
 }
 
-export function deleteRecurring(recurringId) {
-  return apiFetch("/recurring/" + recurringId, { method: "DELETE" });
+export function deleteRecurring(recurringId, deleteExpenses = false) {
+  return apiFetch(
+    "/recurring/" + recurringId + "?delete_expenses=" + deleteExpenses,
+    { method: "DELETE" },
+  );
 }

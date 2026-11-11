@@ -97,6 +97,32 @@ function RecurringDetailsDialog({ item, action, onClose, onToggle, onDelete }) {
   );
 }
 
+function DeleteConfirmDialog({ item, onClose, onConfirm }) {
+  return (
+    <Dialog open onClose={onClose} fullWidth maxWidth="xs">
+      <DialogTitle>{"Delete " + item.title + "?"}</DialogTitle>
+      <DialogContent>
+        <Typography>
+          This will delete the recurring schedule. Do you also want to delete
+          all the expenses it created so far, including past months?
+        </Typography>
+      </DialogContent>
+      <DialogActions sx={{ flexWrap: "wrap", gap: 1 }}>
+        <Button onClick={onClose}>Cancel</Button>
+        <Box sx={{ flex: 1 }} />
+        <Button onClick={() => onConfirm(false)}>Delete schedule only</Button>
+        <Button
+          color="error"
+          variant="contained"
+          onClick={() => onConfirm(true)}
+        >
+          Delete schedule and its expenses
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
 function Recurring() {
   const [loading, setLoading] = useState(true);
   const [recurring, setRecurring] = useState([]);
@@ -107,6 +133,7 @@ function Recurring() {
   const [selectedId, setSelectedId] = useState(null); // id of the item shown in the details dialog
   const [pending, setPending] = useState({}); // { [id]: "toggle" | "delete" }
   const [page, setPage] = useState(1);
+  const [deleteTarget, setDeleteTarget] = useState(null);
 
   // Live item for the dialog (not a snapshot), so status updates while it's open
   const selected = recurring.find((r) => r.id === selectedId) || null;
@@ -180,11 +207,11 @@ function Recurring() {
     }
   }
 
-  async function handleDelete(r) {
+  async function handleDelete(r, deleteExpenses) {
     if (pending[r.id]) return;
     setBusy(r.id, "delete");
     try {
-      await deleteRecurring(r.id);
+      await deleteRecurring(r.id, deleteExpenses);
       setDelErr("");
       // Remove locally instead of refetching
       setRecurring((list) => list.filter((x) => x.id !== r.id));
@@ -333,7 +360,8 @@ function Recurring() {
                     disabled={isBusy}
                     onClick={(e) => {
                       e.stopPropagation();
-                      handleDelete(r);
+                      setDeleteTarget(r);
+                      //handleDelete(r);
                     }}
                   >
                     {isDeleting ? "Deleting..." : "Delete"}
@@ -369,8 +397,19 @@ function Recurring() {
           onClose={() => setSelectedId(null)}
           onToggle={() => handleToggle(selected)} // dialog open ne untundhi, status live ga marutundhi
           onDelete={() => {
-            handleDelete(selected);
+            setDeleteTarget(selected);
             setSelectedId(null);
+          }}
+        />
+      )}
+      {/* Delete confirm dialog, only rendered while a delete is waiting for confirmation */}
+      {deleteTarget && (
+        <DeleteConfirmDialog
+          item={deleteTarget}
+          onClose={() => setDeleteTarget(null)}
+          onConfirm={(deleteExpenses) => {
+            handleDelete(deleteTarget, deleteExpenses);
+            setDeleteTarget(null);
           }}
         />
       )}
