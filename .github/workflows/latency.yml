@@ -1,0 +1,29 @@
+name: latency-test
+on: workflow_dispatch
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      VERCEL_URL: https://cent-sible-five.vercel.app/v1/api/health
+      RENDER_URL: https://centsible-nfcg.onrender.com/health
+    steps:
+      - name: Where is this runner?
+        run: curl -s https://ipinfo.io/json | grep -E '"(city|region|country)"'
+
+      - name: Check what each URL returns
+        run: |
+          echo "--- Vercel ---"; curl -s "$VERCEL_URL" | head -c 200; echo
+          echo "--- Render ---"; curl -s "$RENDER_URL" | head -c 200; echo
+
+      - name: Test via Vercel
+        run: |
+          for i in 1 2 3 4 5; do
+            curl -o /dev/null -s -w "vercel run $i | connect: %{time_connect}s | tls: %{time_appconnect}s | first byte: %{time_starttransfer}s\n" "$VERCEL_URL"
+          done
+
+      - name: Test Render directly
+        run: |
+          for i in 1 2 3 4 5; do
+            curl -o /dev/null -s -w "render run $i | connect: %{time_connect}s | tls: %{time_appconnect}s | first byte: %{time_starttransfer}s\n" "$RENDER_URL"
+          done
