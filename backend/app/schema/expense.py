@@ -37,6 +37,7 @@ class ExpenseResponse(BaseModel):
     receipt_key: str | None
     created_at: datetime
     updated_at: datetime
+    recurring_id: int | None
 
     model_config = {"from_attributes": True}
 

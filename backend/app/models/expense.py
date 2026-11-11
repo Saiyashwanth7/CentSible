@@ -76,3 +76,9 @@ class Expense(Base):
         "Category",
         back_populates="expenses",
     )
+    recurring_id = Column(
+        Integer,
+        ForeignKey("recurring_expenses.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )

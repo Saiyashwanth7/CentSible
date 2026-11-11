@@ -9,13 +9,17 @@ from app.models.expense import Expense
 from app.models.recurring_expense import RecurringExpense
 from app.schema.recurring import RecurringCreate, RecurringUpdate
 from app.services.category_services import get_category
+from app.services.expense_services import get_expense
 from app.utils.recurrence import advance
 from app.utils.stats import today_local
 from app.utils.updates import apply_updates
 
 
 async def get_recurring(
-    recurring_id: int, user_id: int, session: AsyncSession
+    recurring_id: int,
+    user_id: int,
+    session: AsyncSession,
+    for_update: bool = False,
 ) -> RecurringExpense:
     stmt = (
         select(RecurringExpense)
@@ -25,6 +29,8 @@ async def get_recurring(
         .options(selectinload(RecurringExpense.category))
         .execution_options(populate_existing=True)
     )
+    if for_update:
+        stmt = stmt.with_for_update()  # locks this row until the transaction ends
     recurring = (await session.scalars(stmt)).first()
     if recurring is None:
         raise RecurringExpenseDoesNotExist
@@ -67,6 +73,7 @@ async def materialize_due(
                     date=recurring.next_date,
                     notes=recurring.notes or "Recurring",
                     owner_id=recurring.owner_id,
+                    recurring_id=recurring.id,
                 )
             )
             recurring.next_date = advance(
@@ -120,9 +127,22 @@ async def update_recurring(
     return await get_recurring(recurring_id, user_id, session)
 
 
+from sqlalchemy import delete
+
+
 async def delete_recurring(
-    recurring_id: int, user_id: int, session: AsyncSession
+    recurring_id: int, user_id: int, session: AsyncSession, delete_expenses: bool
 ) -> None:
-    recurring = await get_recurring(recurring_id, user_id, session)
+    # lock the row, so the beat task can't add new expenses while we delete
+    recurring = await get_recurring(recurring_id, user_id, session, for_update=True)
+
+    if delete_expenses:
+        await session.execute(
+            delete(Expense).where(
+                Expense.recurring_id == recurring_id,
+                Expense.owner_id == user_id,
+            )
+        )
+
     await session.delete(recurring)
     await session.flush()

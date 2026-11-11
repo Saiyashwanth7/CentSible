@@ -32,5 +32,12 @@ async def update_recurring(
 
 # delete recurring
 @router.delete("/{recurring_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_recurring(recurring_id: int, user: CurrentUser, session: SessionDep):
-    await recurring_services.delete_recurring(recurring_id, user.id, session)
+async def delete_recurring(
+    recurring_id: int,
+    user: CurrentUser,
+    session: SessionDep,
+    delete_expenses: bool = False,
+):
+    await recurring_services.delete_recurring(
+        recurring_id, user.id, session, delete_expenses
+    )
