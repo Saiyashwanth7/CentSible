@@ -86,3 +86,13 @@ docker-compose ps
 
 alembic upgrade head
 ```
+
+## DockerFile
+
+Important commands:
+
+```bash
+docker build -t centsible-backend .
+
+docker run --rm -p 8001:8000 --env-file .env.supabase centsible-backend
+```
