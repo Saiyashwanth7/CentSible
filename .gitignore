@@ -1,0 +1,17 @@
+backend/app/models/sample.py
+backend/receipt_test.jpg
+backend/run.sh
+backend/sample.jpg
+backend/test_storage.py
+backend/tests/
+draft/
+node_modules/
+notes_md/AuthContext_pages.md
+notes_md/receipt_cloud_storage.md
+package-lock.json
+package.json
+remaining_tasks.md
+venv/
+.vscode/
+backend/app/core/settings/sample_base.py
+.env.important
