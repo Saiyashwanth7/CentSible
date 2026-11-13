@@ -77,6 +77,11 @@ class BaseAppSettings(BaseSettings):
     brevo_api_key: str | None = None
     from_email: str | None = None
 
+    # LLM integration
+    openrouter_api_key: str | None = None
+    openrouter_model: str = "google/gemma-4-31b-it:free"
+    openrouter_fallback_model: str = "openrouter/free"
+
     # celery
     celery_broker_url: str | None = None
 

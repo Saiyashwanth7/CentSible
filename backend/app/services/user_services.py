@@ -15,6 +15,8 @@ from app.auth.password import hash_password, verify_password
 from app.utils.logging import Logger, LogLevel
 from app.services.category_services import seed_default_categories
 from app.services.guest_seed import seed_guest_data
+from app.models.receipts import Receipt
+from app.services.receipt_services import delete_receipt_files
 import secrets
 
 
@@ -119,9 +121,11 @@ async def patch_user_name(id: int, user: UserPatch, session: AsyncSession) -> Us
 
 async def delete_user(id: int, session: AsyncSession) -> None:
     user = await get_user_by_id(id, session)
+    stmt = select(Receipt.file_key).where(Receipt.owner_id == id)
+    keys = list(await session.scalars(stmt))
     await session.delete(user)
     await session.flush()
-    return
+    await delete_receipt_files(keys)
 
 
 async def patch_user_password(

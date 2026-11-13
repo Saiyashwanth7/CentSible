@@ -17,6 +17,7 @@ from app.schema.expense import (
     ExpenseCreate,
     ExpenseUpdate,
 )
+from app.services.receipt_services import delete_receipt_by_key
 from app.services.category_services import get_category
 from app.utils.stats import shift_month, today_local
 from app.utils.updates import apply_updates
@@ -111,7 +112,8 @@ async def update_expense(
 # delete expense
 async def delete_expense(expense_id: int, user_id, session: AsyncSession) -> None:
     expense = await get_expense(expense_id, user_id, session)
-    # TODO (receipts): also delete expense.receipt_key from R2
+    if expense.receipt_key is not None:
+        await delete_receipt_by_key(expense.receipt_key, user_id, session)
     await session.delete(expense)
     await session.flush()
 

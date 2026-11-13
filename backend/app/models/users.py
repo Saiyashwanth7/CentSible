@@ -1,18 +1,12 @@
 from sqlalchemy import (
     Boolean,
     Column,
-    Date,
     DateTime,
-    Float,
-    ForeignKey,
     Integer,
     String,
-    Numeric,
     false,
 )
-from decimal import Decimal
 from sqlalchemy.orm import relationship
-from sqlalchemy.sql import func
 from datetime import datetime, timezone
 
 from app.db.base_class import Base
@@ -60,27 +54,8 @@ class User(Base):
         "Category", back_populates="owner", cascade="all, delete", passive_deletes=True
     )
 
-    @property
-    def has_password(self) -> bool:
-        return self.hashed_password is not None
-
-    expenses = relationship(
-        "Expense", back_populates="owner", cascade="all, delete", passive_deletes=True
-    )
-
-    budgets = relationship(
-        "Budget", back_populates="owner", cascade="all, delete", passive_deletes=True
-    )
-
-    recurring = relationship(
-        "RecurringExpense",
-        back_populates="owner",
-        cascade="all, delete",
-        passive_deletes=True,
-    )
-
-    categories = relationship(
-        "Category", back_populates="owner", cascade="all, delete", passive_deletes=True
+    receipts = relationship(
+        "Receipt", back_populates="owner", cascade="all, delete", passive_deletes=True
     )
 
     @property

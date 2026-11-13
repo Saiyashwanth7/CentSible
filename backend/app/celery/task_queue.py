@@ -10,6 +10,7 @@ celery_task_queue = Celery(
         "app.celery.tasks.email_tasks",
         "app.celery.tasks.recurring_tasks",
         "app.celery.tasks.guest_tasks",
+        "app.celery.tasks.receipt_tasks",
     ],
 )
 
