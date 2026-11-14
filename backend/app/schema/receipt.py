@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from datetime import datetime, date
+import datetime as dt
 from app.enums.receipt import Status
 from decimal import Decimal
 
@@ -10,7 +10,7 @@ class ReceiptResponse(BaseModel):
     extracted_data: dict | None = None
     error_message: str | None = None
     expense_id: int | None = None
-    created_at: datetime
+    created_at: dt.datetime
     model_config = {"from_attributes": True}
 
 
@@ -19,8 +19,8 @@ class ReceiptUrlResponse(BaseModel):
 
 
 class ExtractedReceipt(BaseModel):
-    merchant: str | None
-    date: date | None
-    total: Decimal | None
-    currency: str | None
-    category: str | None
+    title: str | None = None
+    amount: Decimal | None = None
+    date: dt.date | None = None
+    category_name: str | None = None
+    category_id: int | None = None
