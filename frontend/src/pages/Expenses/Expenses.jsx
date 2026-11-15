@@ -6,6 +6,7 @@ import {
   updateExpense,
   exportCSV,
 } from "../../api/expenses";
+import { getReceipt, uploadReceipt, confirmReceipt } from "../../api/receipts";
 import { getCategories } from "../../api/categories";
 import {
   Alert,
@@ -29,6 +30,11 @@ import {
 import { DatePicker } from "@mui/x-date-pickers/DatePicker";
 import dayjs from "dayjs";
 import Mascot from "../../components/Mascot/Mascot";
+
+const RECEIPT_TYPES = ["image/jpeg", "image/png", "image/webp"];
+const MAX_RECEIPT_SIZE = 5 * 1024 * 1024; // 5 MB, same as the backend
+const POLL_INTERVAL_MS = 2000;
+const POLL_MAX_TRIES = 60; // 60 x 2 sec = 2 minutes
 
 function DetailRow({ label, value }) {
   return (
@@ -109,6 +115,14 @@ function Expenses() {
   const [refreshKey, setRefreshKey] = useState(0); // bump this to reload the current page
   const [pageLoading, setPageLoading] = useState(false);
 
+  // receipt scanning
+  const [scanning, setScanning] = useState(false); // uploading and reading the receipt
+  const [scanErr, setScanErr] = useState("");
+  const [receiptId, setReceiptId] = useState(null); // set while the form is in "review receipt" mode
+  const [confirm, setConfirm] = useState(false); // saving the reviewed receipt
+  const [confirmErr, setConfirmErr] = useState("");
+  const fileInputRef = useRef(null);
+
   // Loads the list again whenever the filter, the page or refreshKey changes.
   // The cancelled flag stops an older, slower response from overwriting a newer one.
   useEffect(() => {
@@ -159,12 +173,14 @@ function Expenses() {
   function resetForm() {
     setFormOpen(false);
     setEditingId(null);
+    setReceiptId(null);
     setTitle("");
     setAmount("");
     setFormCategoryId("");
     setDate("");
     setNotes("");
     setFormErr("");
+    setConfirmErr("");
     setFormSubmit(false);
   }
 
@@ -239,6 +255,78 @@ function Expenses() {
     }
   }
 
+  // Asks the backend every 2 seconds if the receipt is ready.
+  // Returns the receipt when it is ready, throws when it failed or took too long.
+  async function pollingReceipts(id) {
+    for (let i = 0; i < POLL_MAX_TRIES; i++) {
+      const r = await getReceipt(id);
+      if (r.status === "ready") return r;
+      if (r.status === "failed") {
+        throw new Error(r.error_message || "Could not read this receipt");
+      }
+      await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+    }
+    throw new Error("This is taking too long, please try again later");
+  }
+
+  // Fills the form with what the model read, and opens it in "review receipt" mode.
+  function openReview(ready) {
+    const data = ready.extracted_data ?? {};
+    setEditingId(null);
+    setTitle(data.title ?? "");
+    setAmount(data.amount ?? "");
+    setFormCategoryId(data.category_id ?? "");
+    setDate(data.date ?? dayjs().format("YYYY-MM-DD")); // the model leaves it empty when unsure
+    setNotes("");
+    setFormErr("");
+    setConfirmErr("");
+    setReceiptId(ready.id);
+    setFormOpen(true);
+  }
+
+  // user picked a receipt photo: check it, upload it, wait for the draft, open the review form
+  async function handleReceiptSelected(e) {
+    const file = e.target.files[0];
+    e.target.value = ""; // so the same file can be picked again
+    if (!file) return;
+
+    if (!RECEIPT_TYPES.includes(file.type)) {
+      setScanErr("Please choose a JPEG, PNG or WebP image");
+      return;
+    }
+    if (file.size > MAX_RECEIPT_SIZE) {
+      setScanErr("Image must be under 5 MB");
+      return;
+    }
+
+    setScanning(true);
+    setScanErr("");
+    try {
+      const receipt = await uploadReceipt(file);
+      const ready = await pollingReceipts(receipt.id);
+      openReview(ready);
+    } catch (error) {
+      setScanErr(error.message);
+    } finally {
+      setScanning(false);
+    }
+  }
+
+  // user checked the draft and pressed "Confirm expense"
+  async function handleConfirmReceipt(id, title, amount, catId, date, notes) {
+    setConfirmErr("");
+    setConfirm(true);
+    try {
+      await confirmReceipt(id, title, Number(amount), catId, date, notes);
+      setRefreshKey((k) => k + 1); // show the new expense in the list
+      resetForm();
+    } catch (error) {
+      setConfirmErr(error.message);
+    } finally {
+      setConfirm(false);
+    }
+  }
+
   // to deal with the request and response time
   if (loading) {
     return (
@@ -303,6 +391,20 @@ function Expenses() {
           >
             Add expense
           </Button>
+          <input
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            hidden
+            ref={fileInputRef}
+            onChange={handleReceiptSelected}
+          />
+          <Button
+            variant="outlined"
+            disabled={scanning}
+            onClick={() => fileInputRef.current.click()}
+          >
+            {scanning ? "Reading receipt..." : "Scan receipt"}
+          </Button>
         </Stack>
       </Box>
 
@@ -319,6 +421,20 @@ function Expenses() {
       {delErr && (
         <Alert severity="error" sx={{ mb: 2 }}>
           {delErr}
+        </Alert>
+      )}
+      {scanErr && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {scanErr}
+        </Alert>
+      )}
+      {scanning && (
+        <Alert
+          severity="info"
+          icon={<CircularProgress size={18} />}
+          sx={{ mb: 2 }}
+        >
+          Reading your receipt, this can take up to a minute.
         </Alert>
       )}
 
@@ -406,11 +522,23 @@ function Expenses() {
         </Card>
       )}
 
-      {/* Add / edit dialog */}
+      {/* Add / edit / review receipt dialog */}
       <Dialog open={formOpen} onClose={resetForm} fullWidth maxWidth="sm">
-        <DialogTitle>{editingId ? "Edit expense" : "Add expense"}</DialogTitle>
+        <DialogTitle>
+          {receiptId
+            ? "Review receipt"
+            : editingId
+              ? "Edit expense"
+              : "Add expense"}
+        </DialogTitle>
         <DialogContent>
           <Box sx={{ display: "flex", flexDirection: "column", gap: 2, mt: 1 }}>
+            {receiptId && (
+              <Alert severity="info">
+                We filled this in from your receipt. Please check it before
+                saving.
+              </Alert>
+            )}
             <TextField
               label="Title"
               value={title}
@@ -456,25 +584,43 @@ function Expenses() {
                 onChange={(e) => setNotes(e.target.value)}
               />
             </Box>
-            {formErr && <Alert severity="error">{formErr}</Alert>}
+            {(formErr || confirmErr) && (
+              <Alert severity="error">{formErr || confirmErr}</Alert>
+            )}
           </Box>
         </DialogContent>
         <DialogActions>
-          <Button onClick={resetForm} disabled={formSubmit}>
+          <Button onClick={resetForm} disabled={formSubmit || confirm}>
             Cancel
           </Button>
           <Button
             variant="contained"
-            onClick={handleSubmit}
-            disabled={formSubmit}
+            onClick={
+              receiptId
+                ? () =>
+                    handleConfirmReceipt(
+                      receiptId,
+                      title,
+                      amount,
+                      formCategoryId,
+                      date,
+                      notes,
+                    )
+                : handleSubmit
+            }
+            disabled={formSubmit || confirm}
           >
-            {formSubmit
-              ? editingId
+            {receiptId
+              ? confirm
                 ? "Saving..."
-                : "Adding..."
-              : editingId
-                ? "Update"
-                : "Add expense"}
+                : "Confirm expense"
+              : formSubmit
+                ? editingId
+                  ? "Saving..."
+                  : "Adding..."
+                : editingId
+                  ? "Update"
+                  : "Add expense"}
           </Button>
         </DialogActions>
       </Dialog>

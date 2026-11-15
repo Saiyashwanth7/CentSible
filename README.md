@@ -1,12 +1,12 @@
 # CentSible
 
-A personal expense management app. Users track expenses, set monthly budgets, automate recurring charges, and get spending insights through a REST API, with a React frontend on top. A small cat mascot greets you on most pages and reacts to how your spending is going.
+A personal expense management app. Users track expenses, set monthly budgets, automate recurring charges, scan receipts and get spending insights through a REST API, with a React frontend on top. A small cat mascot greets you on most pages and reacts to how your spending is going.
 
 The backend is built with **FastAPI**, **async SQLAlchemy 2.0**, **PostgreSQL**, **Redis**, **RabbitMQ** and **Celery**. The frontend is built with **React**, **Vite** and **MUI**.
 
 **Live demo:** [cent-sible-five.vercel.app](https://cent-sible-five.vercel.app) (frontend on Vercel, API on Render)
 
-> **Status:** deployed. Auth (email and Google), expenses, categories, budgets, recurring expenses, insights, dashboard and account management are working end to end. Bank statement import and receipt scanning are not wired up yet. See the [Roadmap](#roadmap).
+> **Status:** deployed. Auth (email, Google and a one-click demo account), expenses, categories, budgets, recurring expenses, insights, dashboard, account management and receipt scanning (backend and frontend) are working end to end. Bank statement import is not built yet. See the [Roadmap](#roadmap).
 
 ---
 
@@ -20,6 +20,7 @@ The backend is built with **FastAPI**, **async SQLAlchemy 2.0**, **PostgreSQL**,
 - [Getting started (local)](#getting-started-local)
 - [Run the production image locally](#run-the-production-image-locally)
 - [Google sign-in setup](#google-sign-in-setup)
+- [Receipt scanning setup](#receipt-scanning-setup)
 - [Email setup (Brevo)](#email-setup-brevo)
 - [Deployment](#deployment)
 - [Troubleshooting](#troubleshooting)
@@ -40,7 +41,8 @@ The backend is built with **FastAPI**, **async SQLAlchemy 2.0**, **PostgreSQL**,
 - Password reset by email: single-use tokens, stored only as SHA-256 hashes, 15-minute expiry, identical responses whether or not the email exists
 - Sign in with Google (OAuth 2.0 / OpenID Connect). The same flow handles both first-time signup and later logins; an existing account with the same email is linked automatically
 - Accounts created with Google have no password. They can add one from the Account page, which sends the normal reset email
-- Redis rate limiting on login and password reset (per IP and per email)
+- Redis rate limiting on login and password reset (per IP and per email), on demo account creation (per IP) and on receipt uploads (per IP and per user)
+- One-click demo account: creates an isolated guest user with sample data and signs them in, so the live demo can be tried without signing up. Limited to 5 new demo accounts per hour per IP. Demo accounts are deleted automatically after 24 hours
 
 **Expense tracking**
 
@@ -48,6 +50,18 @@ The backend is built with **FastAPI**, **async SQLAlchemy 2.0**, **PostgreSQL**,
 - Expense CRUD with filtering (category, date range, text search) and pagination
 - CSV export with spreadsheet formula-injection protection
 - Dashboard totals computed in SQL
+
+**Receipt scanning**
+
+- A **Scan receipt** button on the Expenses page. Pick a receipt photo, wait while it is read, then check the filled-in form and confirm
+- Upload a receipt photo (JPEG, PNG or WebP, up to 5 MB). The frontend checks the type and size before uploading, and the backend checks the file type from the file's first bytes, never from the filename or the `Content-Type` header
+- Images are stored in a private Supabase Storage bucket and shown only through short-lived (5 minute) presigned URLs
+- A Celery task sends the image to an OpenRouter vision model, which returns a draft: title, amount, date and a category
+- The model only sees the names of the user's own categories and must pick one of them. The backend maps the name to a `category_id`, with keyword rules and "Other" as fallbacks
+- The draft is saved on the receipt (`pending` to `processing` to `ready` or `failed`). A real expense is created only when the user reviews, edits and confirms it
+- The frontend polls the receipt every 2 seconds (for up to 2 minutes), then opens the add expense dialog in "Review receipt" mode with the draft filled in. Fields the model could not read are left empty (the date falls back to today)
+- A receipt can be confirmed only once, and deleting the expense also deletes the receipt and its image
+- Guests cannot upload. Uploads are rate limited per user (20 per hour) and per IP
 
 **Budgets and insights**
 
@@ -63,7 +77,7 @@ The backend is built with **FastAPI**, **async SQLAlchemy 2.0**, **PostgreSQL**,
 **Account management**
 
 - Edit profile name, change password, export data as CSV, delete account
-- Deleting an account asks the user to type `DELETE`, then removes their data through database cascades and clears the login cookies
+- Deleting an account asks the user to type `DELETE`, then removes their data through database cascades, deletes their receipt images from storage and clears the login cookies
 
 **Frontend experience**
 
@@ -72,6 +86,7 @@ The backend is built with **FastAPI**, **async SQLAlchemy 2.0**, **PostgreSQL**,
 - Budgets are shown as progress bars: green while safe, orange from 80%, red when over
 - Click an expense, a recurring item or a budget to open its details
 - Add and edit forms open in dialogs, with MUI date pickers instead of the browser default
+- Scan a receipt from the Expenses page: upload progress message, then a review dialog before anything is saved
 - The navbar highlights the current page and collapses into a menu on phones
 
 **Background jobs**
@@ -79,29 +94,31 @@ The backend is built with **FastAPI**, **async SQLAlchemy 2.0**, **PostgreSQL**,
 - Welcome, password reset and password reset confirmation emails are sent by Celery workers, so API responses never wait on the email provider
 - Failed email tasks retry with exponential backoff and jitter
 - A Celery beat schedule creates due recurring expenses every day at 00:10 (Asia/Kolkata)
+- A Celery beat job deletes expired demo accounts every hour
+- Receipt scanning runs in a Celery task, so an upload never waits on the LLM
 
 **Not finished yet**
 
 - Bank statement import (CSV preview and commit). Only the request/response schemas exist; the service and endpoints are not implemented
-- Receipt scanning with an LLM and Cloudflare R2 storage
 
 ---
 
 ## Tech stack
 
-| Area                 | Tools                                                                                         |
-| -------------------- | --------------------------------------------------------------------------------------------- |
-| API                  | Python 3.12, FastAPI, Pydantic v2                                                             |
-| Database             | PostgreSQL, SQLAlchemy 2.0 (async), Alembic                                                   |
-| Auth                 | python-jose (JWT), passlib/bcrypt, Authlib (Google OAuth)                                     |
-| Background jobs      | Celery (worker and beat), RabbitMQ as the broker                                              |
-| Rate limiting, cache | Redis                                                                                         |
-| Email                | Brevo transactional email API (template based)                                                |
-| File storage         | Cloudflare R2 (S3-compatible, reserved for receipts)                                          |
-| Frontend             | React 19 (JavaScript), Vite, MUI, MUI X Date Pickers, dayjs, React Router                     |
-| Tooling              | Docker, Docker Compose, Alembic, pytest                                                       |
-| Hosting              | Vercel (frontend), Render (API), Supabase (PostgreSQL), Upstash (Redis), CloudAMQP (RabbitMQ) |
-| Monitoring           | UptimeRobot (keeps the free Render service and Supabase project awake)                        |
+| Area                 | Tools                                                                                                     |
+| -------------------- | --------------------------------------------------------------------------------------------------------- |
+| API                  | Python 3.12, FastAPI, Pydantic v2                                                                         |
+| Database             | PostgreSQL, SQLAlchemy 2.0 (async), Alembic                                                               |
+| Auth                 | python-jose (JWT), passlib/bcrypt, Authlib (Google OAuth)                                                 |
+| Background jobs      | Celery (worker and beat), RabbitMQ as the broker                                                          |
+| Rate limiting, cache | Redis                                                                                                     |
+| Email                | Brevo transactional email API (template based)                                                            |
+| File storage         | Supabase Storage (S3-compatible, accessed with boto3), private bucket for receipts                        |
+| LLM                  | OpenRouter (free vision model with a free-router fallback), called with httpx                             |
+| Frontend             | React 19 (JavaScript), Vite, MUI, MUI X Date Pickers, dayjs, React Router                                 |
+| Tooling              | Docker, Docker Compose, Alembic, pytest                                                                   |
+| Hosting              | Vercel (frontend), Render (API), Supabase (PostgreSQL and Storage), Upstash (Redis), CloudAMQP (RabbitMQ) |
+| Monitoring           | UptimeRobot (keeps the free Render service and Supabase project awake)                                    |
 
 ---
 
@@ -114,16 +131,20 @@ Browser (React)
    |  fetch("/api/v1/...", credentials: "include")
    v
 Vercel  --- rewrite /api/* --->  Render: FastAPI ---------> PostgreSQL
-                                    |
+                                    |          \
+                                    |           +--------> Supabase Storage (receipt images)
                                     |  task.delay(...)
                                     v
-                                 RabbitMQ ---> Celery worker ---> Brevo (emails) / PostgreSQL (recurring expenses)
-                                    ^
-                                    |  daily at 00:10 IST
+                                 RabbitMQ ---> Celery worker ---> Brevo (emails)
+                                    ^                        |---> PostgreSQL (recurring expenses, receipt drafts)
+                                    |                        |---> Supabase Storage + OpenRouter (receipt scanning)
+                                    |  daily at 00:10 IST, hourly cleanup
                                  Celery beat
 ```
 
 In production the browser only ever talks to the Vercel domain. `frontend/vercel.json` rewrites `/api/*` to the Render backend, so cookies are first-party and no cross-site cookie or CORS setup is needed. Locally, the frontend talks to `localhost:8000` directly.
+
+Receipt uploads follow the same path. After the API stores the image and the receipt row, it queues `task_process_receipt`. The worker downloads the image, calls OpenRouter and saves the draft on the receipt. The frontend polls `GET /receipts/receipt/{id}` every 2 seconds until the status is `ready` or `failed`, then opens the review dialog.
 
 ### Backend layers
 
@@ -138,8 +159,8 @@ Schema      Exceptions
 - **Routers** only handle HTTP: read the request, call a service, return the response.
 - **Services** hold all business logic and database queries. Every function takes the current `user_id` and filters by it, so one user can never read another user's data.
 - **Schemas** (Pydantic) validate input and shape output. Money is validated as `Decimal` with 2 decimal places on the way in and sent as a plain number on the way out.
-- **Exceptions** are domain errors (`CategoryInUse`, `ExpenseDoesNotExist`, ...) turned into clean HTTP responses by one handler.
-- **One transaction per request.** `get_session` commits when the request finishes and rolls back on any exception, so a request is all or nothing.
+- **Exceptions** are domain errors (`CategoryInUse`, `ExpenseDoesNotExist`, `ReceiptDoesNotExist`, ...) turned into clean HTTP responses by one handler.
+- **One transaction per request.** `get_session` commits when the request finishes and rolls back on any exception, so a request is all or nothing. The receipt upload route commits explicitly before queueing its task, so the worker can always see the row.
 
 ```
 backend/
@@ -147,16 +168,19 @@ backend/
     auth/                   JWT, password hashing, current-user dependency, Google OAuth client
     celery/
       task_queue.py         Celery app, reliability settings, beat schedule
-      tasks/                email_tasks.py, recurring_tasks.py
+      tasks/                email_tasks.py, recurring_tasks.py, guest_tasks.py, receipt_tasks.py
     core/                   settings (environment variables), one class per environment
     db/                     async engine, session, declarative base
-    enums/                  Frequency, email template ids, environments
+    enums/                  Frequency, email template ids, environments, receipt Status
     exceptions/             domain errors and the shared HTTP handler
-    external_services/      Brevo email client
+    external_services/
+      cloud_storage/        Supabase Storage client (upload, delete, presigned URL, download)
+      llm/                  OpenRouter receipt extractor
+      (email)               Brevo email client
     models/                 SQLAlchemy models
     routers/v1/             HTTP endpoints (auth/ holds password, reset and Google auth)
     schema/                 Pydantic request and response models
-    services/               business logic
+    services/               business logic (receipt_services.py holds the receipt rules)
     utils/                  recurrence math, categorization, stats helpers
     main.py
   migrations/               Alembic migrations
@@ -177,7 +201,7 @@ frontend/src/
   theme.js                  the whole look of the app: colors, fonts, shapes, component defaults
   api/
     index.js                apiFetch: the only place that calls fetch(), handles 401 + refresh
-    auth.js  user.js  categories.js  expenses.js  budget.js  recurring.js  insights.js
+    auth.js  user.js  categories.js  expenses.js  budget.js  recurring.js  insights.js  receipts.js
   contexts/
     AuthContext.jsx         loads the current user once and shares it with every page
   components/
@@ -188,6 +212,8 @@ frontend/src/
     Landing/  Auth/  Dashboard/  Expenses/  Budget/  Recurring/  Account/
     ForgotPassword/  ResetPassword/  NotFound/
 ```
+
+The receipt scan flow lives inside the Expenses page (`pages/Expenses`) and reuses the same add expense dialog: when it is opened from a scan it switches to "Review receipt" mode and confirms through `POST /receipts/receipt/{id}/confirm` instead of the normal create call.
 
 Route groups:
 
@@ -202,10 +228,16 @@ Route groups:
 - **Money is `Numeric(10, 2)` / `Decimal`, never float**, so totals never drift.
 - **Cookie auth, not bearer headers**, so tokens can't be stolen by injected scripts.
 - **Recurring expenses are generated by a scheduled job**, not as a side effect of reading data.
-- **Celery tasks are safe to run twice.** Tasks are acknowledged only after they finish (`task_acks_late`), so a task from a crashed worker is handed to another worker. The recurring task only creates what is still due, and a duplicate email is harmless.
-- **Each recurring task run builds a throwaway async engine with `NullPool`.** Celery tasks are plain functions that start their own event loop with `asyncio.run()`, and pooled connections from the app's shared engine are tied to one loop.
+- **Celery tasks are safe to run twice.** Tasks are acknowledged only after they finish (`task_acks_late`), so a task from a crashed worker is handed to another worker. The recurring task only creates what is still due, the receipt task only claims receipts that are still `pending`, and a duplicate email is harmless.
+- **Each Celery task that touches the database builds a throwaway async engine with `NullPool`** (recurring, guest cleanup and receipts). Celery tasks are plain functions that start their own event loop with `asyncio.run()`, and pooled connections from the app's shared engine are tied to one loop.
+- **Receipts: database row first, storage second.** If the upload to storage fails, the request fails and the row is rolled back, so there is never a row without a file. On delete it is the other way round: the row goes first, then the file is removed on a best effort basis, because the database is the source of truth.
+- **The LLM output is a draft, not data.** Receipt images are untrusted input (text inside an image can contain instructions), so the prompt tells the model to ignore them, the output is validated with Pydantic, and nothing becomes an expense until the user confirms it.
+- **The LLM never sees category ids.** It gets the user's category names and the backend maps the answer to an id, so a wrong or made-up category can never point at another user's data.
+- **The receipt task never holds a database connection while it waits.** It claims the receipt, closes the session, then downloads and calls the LLM, then opens a new session to save the result.
+- **Receipt files use user-specific keys.** Files are stored as `receipts/<user_id>/<uuid>.<ext>`, and every receipt query filters by `owner_id`.
+- **The frontend polls instead of waiting on one long request.** The upload returns straight away and the page asks for the receipt every 2 seconds, so a slow free model never ties up an HTTP request and the user sees a "Reading receipt..." state in the meantime.
 - **Deleting a category that is in use is blocked**; the user moves its expenses to another category first. Budgets for a deleted category are removed by the database (`ON DELETE CASCADE`).
-- **Deleting a user relies on database cascades.** Every table that points at a user has `ON DELETE CASCADE`, so one `DELETE` removes their expenses, budgets, recurring items, categories and reset tokens.
+- **Deleting a user relies on database cascades.** Every table that points at a user has `ON DELETE CASCADE`, so one `DELETE` removes their expenses, budgets, recurring items, categories, receipts and reset tokens. Their receipt files are removed from storage right after the database delete.
 - **Database URLs are built with `URL.create`**, never with f-strings, so passwords containing `@`, `#` or `%` can't break the connection string.
 - **The async engine checks connections before using them** (`pool_pre_ping`) and recycles them, because the Supabase pooler closes idle connections.
 - **SSL is a switch, not a hardcoded setting.** `DATABASE_SSL` and `REDIS_SSL` are off by default so local Docker services work, and on in production.
@@ -223,7 +255,10 @@ User 1---* Category 1---* Expense
  |            +---* Budget            (unique per user + category)
  |            +---* RecurringExpense
  +---* PasswordResetToken
+ +---* Receipt  *---0..1 Expense      (set when the receipt is confirmed)
 ```
+
+A receipt row holds the storage key of the image (never sent to the client), a status (`pending`, `processing`, `ready`, `failed`, `confirmed`), the extracted draft as JSON, an optional error message and the id of the expense it became.
 
 ---
 
@@ -231,18 +266,19 @@ User 1---* Category 1---* Expense
 
 Base URL: `http://localhost:8000/api/v1` locally, `/api/v1` on the deployed frontend. Interactive docs are served at `/docs` (Swagger UI) while the app runs.
 
-| Group          | Endpoints                                                                                                                         |
-| -------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| Auth           | `POST /auth/login`, `POST /auth/refresh`, `POST /auth/logout`                                                                     |
-| Google sign-in | `GET /auth/google` (redirects to Google), `GET /auth/google/callback`                                                             |
-| Password reset | `POST /auth/password-reset/request`, `/validate`, `/confirm`                                                                      |
-| Users          | `POST /user/register`, `GET /user/current`, `PATCH /user/update`, `PATCH /user/password`, `DELETE /user/delete`                   |
-| Categories     | `GET /category`, `POST /category/`, `PATCH /category/{id}`, `DELETE /category/{id}`, `POST /category/{id}/reassign`               |
-| Expenses       | `GET /expense`, `POST /expense`, `PUT /expense/{id}`, `DELETE /expense/{id}`, `GET /expense/dashboard`, `GET /expense/export/csv` |
-| Budgets        | `GET /budget` (with spent amount and status), `POST /budget` (upsert), `DELETE /budget/{id}`                                      |
-| Insights       | `GET /insights/trends`                                                                                                            |
-| Recurring      | `GET /recurring`, `POST /recurring`, `PATCH /recurring/{id}` (pause or resume), `DELETE /recurring/{id}`                          |
-| Health         | `GET /` (process is up), `GET` or `HEAD /health` (also checks the database connection)                                            |
+| Group          | Endpoints                                                                                                                                                                                                                                         |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Auth           | `POST /auth/login`, `POST /auth/guest` (demo account), `POST /auth/refresh`, `POST /auth/logout`                                                                                                                                                  |
+| Google sign-in | `GET /auth/google` (redirects to Google), `GET /auth/google/callback`                                                                                                                                                                             |
+| Password reset | `POST /auth/password-reset/request`, `/validate`, `/confirm`                                                                                                                                                                                      |
+| Users          | `POST /user/register`, `GET /user/current`, `PATCH /user/update`, `PATCH /user/password`, `DELETE /user/delete`                                                                                                                                   |
+| Categories     | `GET /category`, `POST /category/`, `PATCH /category/{id}`, `DELETE /category/{id}`, `POST /category/{id}/reassign`                                                                                                                               |
+| Expenses       | `GET /expense`, `POST /expense`, `PUT /expense/{id}`, `DELETE /expense/{id}`, `GET /expense/dashboard`, `GET /expense/export/csv`                                                                                                                 |
+| Budgets        | `GET /budget` (with spent amount and status), `POST /budget` (upsert), `DELETE /budget/{id}`                                                                                                                                                      |
+| Insights       | `GET /insights/trends`                                                                                                                                                                                                                            |
+| Recurring      | `GET /recurring`, `POST /recurring`, `PATCH /recurring/{id}` (pause or resume), `DELETE /recurring/{id}`                                                                                                                                          |
+| Receipts       | `POST /receipts/receipt` (multipart upload, `201`), `GET /receipts/receipt` (`status`, `limit`, `offset`), `GET /receipts/receipt/{id}`, `GET /receipts/receipt/{id}/url`, `POST /receipts/receipt/{id}/confirm`, `DELETE /receipts/receipt/{id}` |
+| Health         | `GET /` (process is up), `GET` or `HEAD /health` (also checks the database connection)                                                                                                                                                            |
 
 Things that are easy to get wrong when calling the API:
 
@@ -252,10 +288,15 @@ Things that are easy to get wrong when calling the API:
 - `PATCH /user/password` needs `current_password`, `password` and `confirm_password`. On success it returns `204` and clears the login cookies, so the client must send the user back to the login page. Accounts without a password get a `400` and should use the reset email instead.
 - `DELETE /user/delete` returns `204` and clears the login cookies.
 - `GET /expense` accepts the query params `category_id`, `start_date`, `end_date`, `search`, `page` (default 1) and `page_size` (default 20, max 100). It returns `{ items, total, pages, page_size }`.
-- Creating an expense takes `title`, `amount` (a number), `category_id`, `date` (`YYYY-MM-DD`) and `notes`, and returns `201`.
+- Creating an expense takes `title`, `amount` (a number), `category_id`, `date` (`YYYY-MM-DD`) and `notes`, and returns `201`. `notes` is required, so send an empty string when there is nothing to say.
 - Deleting returns `204` with no body.
-- Keep trailing slashes exactly as the routes define them. A mismatch makes FastAPI redirect, and behind the proxy that redirect can leave the Vercel domain.
-- Login and password reset are rate limited. Too many attempts return `429`.
+- **Receipt upload is multipart form data**, with the file in the field `file`. It returns `201` straight away with `status: "pending"`. The extracted draft arrives later, so poll `GET /receipts/receipt/{id}` until `status` is `ready` (draft in `extracted_data`) or `failed` (reason in `error_message`).
+- `extracted_data` holds `title`, `amount` (a string, to keep the decimals exact), `date`, `category_name` and `category_id`. Any of them can be `null` when the model could not read it, and the review form should fill the gaps (for example today's date).
+- `POST /receipts/receipt/{id}/confirm` takes the normal expense body (`title`, `amount`, `category_id`, `date`, `notes`) with the values the user finally chose, and returns the new expense. A second confirm on the same receipt returns `409`.
+- `GET /receipts/receipt/{id}/url` returns a presigned image link that expires after 5 minutes. Never store it.
+- Guests get `403` on receipt upload, and too many uploads return `429`. Receipt responses never include the storage key or the owner id.
+- Keep trailing slashes exactly as the routes define them. A mismatch makes FastAPI answer with a `307` redirect to its own absolute URL, and behind the Vercel proxy that sends the browser straight to Render, where the response is blocked by CORS. Routes mounted at a prefix, like `/auth/guest`, use `@router.post("")` so the path has no trailing slash.
+- Login, password reset, demo account creation and receipt upload are rate limited. Too many attempts return `429`.
 
 ---
 
@@ -279,7 +320,7 @@ pip install -r requirements.txt
 
 ### 2. Configure environment variables
 
-Create `backend/.env`. The source of truth for names is `app/core/settings/base.py`. Docker Compose reads the same file, so the database and RabbitMQ credentials are defined once.
+Create `backend/.env`. The source of truth for names is `app/core/config.py`. Docker Compose reads the same file, so the database and RabbitMQ credentials are defined once.
 
 ```env
 # App
@@ -317,12 +358,18 @@ GOOGLE_REDIRECT_URL=http://localhost:8000/api/v1/auth/google/callback
 BREVO_API_KEY=
 FROM_EMAIL=
 
-# Cloudflare R2 (only needed once receipt scanning is built)
-BUCKET_NAME=
+# Supabase Storage (S3 compatible), needed for receipt scanning
+BUCKET_NAME=receipts
 BUCKET_ACCESS_KEY_ID=
 BUCKET_SECRET_KEY=
-BUCKET_REGION=auto
-BUCKET_ENDPOINT_URL=https://<your-account-id>.r2.cloudflarestorage.com
+BUCKET_REGION=
+BUCKET_ENDPOINT_URL=https://<project-ref>.storage.supabase.co/storage/v1/s3
+
+# OpenRouter (receipt scanning)
+OPENROUTER_API_KEY=
+# optional, these have defaults
+# OPENROUTER_MODEL=google/gemma-4-31b-it:free
+# OPENROUTER_FALLBACK_MODEL=openrouter/free
 ```
 
 `DATABASE_SSL`, `REDIS_USERNAME`, `REDIS_PASSWORD` and `REDIS_SSL` are optional and default to off or empty, so local Docker services work without them. They are only needed for hosted services (see [Deployment](#deployment)).
@@ -355,11 +402,11 @@ uvicorn app.main:app --reload
 # Celery worker (on Windows keep --pool=solo, on Linux or macOS you can drop it)
 celery -A app.celery.task_queue worker --loglevel=info --pool=solo
 
-# Celery beat (scheduler for recurring expenses)
+# Celery beat (scheduler for recurring expenses and demo account cleanup)
 celery -A app.celery.task_queue beat --loglevel=info
 ```
 
-When the worker starts, its task list should show four tasks: `task_send_welcome_email`, `task_send_password_reset_email`, `task_send_password_reset_confirmation_email` and `task_materialize_recurring_expenses`.
+When the worker starts, its task list should show six tasks: `task_send_welcome_email`, `task_send_password_reset_email`, `task_send_password_reset_confirmation_email`, `task_materialize_recurring_expenses`, `task_cleanup_expired_guests` and `task_process_receipt`.
 
 To test the recurring task without waiting for 00:10:
 
@@ -383,6 +430,8 @@ npm run dev
 
 Open `http://localhost:5173`. The API docs are at `http://localhost:8000/docs`.
 
+To try receipt scanning locally, finish [Receipt scanning setup](#receipt-scanning-setup), make sure the Celery worker is running, log in with a real account (guests cannot upload) and use the **Scan receipt** button on the Expenses page.
+
 ---
 
 ## Run the production image locally
@@ -401,7 +450,7 @@ Things to know:
 
 - **Inside the container, `localhost` means the container itself.** In your `--env-file`, point `DATABASE_HOST`, `REDIS_HOST` and the host part of `CELERY_BROKER_URL` at `host.docker.internal` to reach services running on your own machine. Or point them at the hosted services (Supabase, Upstash, CloudAMQP) with their SSL settings.
 - **`--env-file` does not strip quotes.** Write `KEY=value`, not `KEY="value"`.
-- **Stop any local worker or beat first.** A local Celery worker on the same broker joins the container's worker and shows clock drift warnings.
+- **Stop any local worker or beat first.** A local Celery worker on the same broker joins the container's worker and shows clock drift warnings. It can also pick up tasks meant for the container.
 - Keep these files out of Git: `.env`, `.env.docker` and every other `.env.*` file. They are listed in `.dockerignore` as well, so they never end up in the image.
 - To check what ended up inside the image: `docker run --rm centsible-backend ls -a`. There should be no `.env` file.
 
@@ -435,6 +484,23 @@ If the OAuth consent screen is in "Testing" mode, only the Google accounts liste
 
 ---
 
+## Receipt scanning setup
+
+1. In Supabase, open Storage and create a **private** bucket named `receipts`.
+2. In the Storage settings, open the S3 connection section. Copy the endpoint URL and the region, then generate an access key. Put them in `BUCKET_ENDPOINT_URL`, `BUCKET_REGION`, `BUCKET_ACCESS_KEY_ID` and `BUCKET_SECRET_KEY`. These keys give full access to storage, so they belong on the backend only.
+3. Create an OpenRouter API key and put it in `OPENROUTER_API_KEY`. The default model is a free vision model, and `openrouter/free` is the fallback when it is rate limited or returns bad output. Free models have rate limits and can be slow, so a scan can take up to a minute or two. The model names can be changed with `OPENROUTER_MODEL` and `OPENROUTER_FALLBACK_MODEL` without touching the code.
+4. Make sure the Celery worker is running. Without it, uploads still work but receipts stay `pending`, and the **Scan receipt** button in the frontend eventually gives up with a "taking too long" message.
+
+Quick check of the storage connection (from the `backend` folder, with a `sample.jpg` next to you):
+
+```bash
+python -c "from app.external_services.cloud_storage import storage; storage.upload_receipt(open('sample.jpg','rb'), 'receipts/test/s.jpg', 'image/jpeg'); print(len(storage.download_receipt('receipts/test/s.jpg')[0])); storage.delete_receipt('receipts/test/s.jpg')"
+```
+
+It prints the file size in bytes and cleans up after itself.
+
+---
+
 ## Email setup (Brevo)
 
 Emails use Brevo templates, so a few one-time steps are needed:
@@ -458,7 +524,7 @@ The password reset route answers as soon as the email task is queued, so a faile
 
 ## Deployment
 
-The deployed setup is Vercel (frontend), Render (backend), Supabase (PostgreSQL), Upstash (Redis) and CloudAMQP (RabbitMQ), all on free tiers, with UptimeRobot keeping things awake.
+The deployed setup is Vercel (frontend), Render (backend), Supabase (PostgreSQL and Storage), Upstash (Redis) and CloudAMQP (RabbitMQ), all on free tiers, with UptimeRobot keeping things awake.
 
 ### Backend on Render
 
@@ -504,6 +570,14 @@ REFRESH_SECRET_KEY=...
 SESSION_SECRET_KEY=...
 GOOGLE_CLIENT_ID=...
 GOOGLE_CLIENT_SECRET=...
+
+BUCKET_NAME=receipts
+BUCKET_ACCESS_KEY_ID=...
+BUCKET_SECRET_KEY=...
+BUCKET_REGION=...
+BUCKET_ENDPOINT_URL=https://<project-ref>.storage.supabase.co/storage/v1/s3
+OPENROUTER_API_KEY=...
+
 BREVO_API_KEY=...
 FROM_EMAIL=...
 ```
@@ -514,9 +588,11 @@ Notes:
 - In production the settings default to **no** allowed origins, so anything you need must be set explicitly.
 - Use fresh random values for the three secret keys. Never reuse the local ones.
 - Cookies are set (and cleared) with `Secure` and `SameSite=Lax` when `APP_ENV=PRODUCTION`, so the site must be served over HTTPS.
-- **Supabase:** use the **Session pooler** connection details (user `postgres.<project-ref>`, host `...pooler.supabase.com`, port `5432`), not the direct connection. The direct connection is IPv6 only and Render cannot reach it. Turn off the Data API and the "automatically expose new tables" option when creating the project, because the app connects straight to Postgres. Do not enable the Supabase GitHub integration. Migrations come from Alembic only.
+- **Supabase database:** use the **Session pooler** connection details (user `postgres.<project-ref>`, host `...pooler.supabase.com`, port `5432`), not the direct connection. The direct connection is IPv6 only and Render cannot reach it. Turn off the Data API and the "automatically expose new tables" option when creating the project, because the app connects straight to Postgres. Do not enable the Supabase GitHub integration. Migrations come from Alembic only.
+- **Supabase Storage:** the S3 endpoint belongs to the same project as the database. Keep the bucket private, receipts are only ever shown through presigned links. The S3 access keys bypass access policies, so they must stay on the backend.
 - **Upstash:** requires TLS, so `REDIS_SSL=true` and `REDIS_USERNAME=default`. Redis is only used for rate limiting, which stays well inside the free command quota.
-- **CloudAMQP:** use the `amqps://` URL (the `s` turns on TLS). The free plan caps connections and monthly messages, which is plenty for a daily beat job and a few emails.
+- **CloudAMQP:** use the `amqps://` URL (the `s` turns on TLS). The free plan caps connections and monthly messages, which is plenty for a daily beat job, a few emails and receipt scans.
+- **OpenRouter:** the free models have rate limits and daily caps, which is fine for a demo. For heavier use, switch `OPENROUTER_MODEL` to a paid model without changing the code.
 - **Brevo:** turn IP blocking off (see [Email setup](#email-setup-brevo)).
 
 ### Keeping the free tiers awake
@@ -560,6 +636,8 @@ The first rule proxies API calls to Render so cookies stay first-party. The seco
 - [ ] `vercel.json` rewrite points at the correct Render URL
 - [ ] Migrations ran (check the Render deploy log for the Alembic lines)
 - [ ] `DATABASE_SSL=true` and `REDIS_SSL=true`, with the Supabase Session pooler details
+- [ ] Supabase Storage bucket `receipts` exists, is private, and the `BUCKET_*` variables are set on Render
+- [ ] `OPENROUTER_API_KEY` is set on Render
 - [ ] Brevo sender verified, templates activated, IP blocking off
 - [ ] UptimeRobot monitor on `/health` shows Up
 - [ ] No secrets committed to the repository
@@ -569,7 +647,7 @@ The first rule proxies API calls to Render so cookies stay first-party. The seco
 ## Troubleshooting
 
 **Google login ends on the login page with "Google sign-in failed"**
-Open the Render logs and find the `Google …failed:` line.
+Open the Render logs and find the `Google ...failed:` line.
 
 - `MismatchingStateError` / `mismatching_state`: the session cookie did not come back. Make sure the browser starts the flow and finishes it on the **same host** (the Vercel domain in production, `localhost` locally, never mixed with `127.0.0.1`), and that `GOOGLE_REDIRECT_URL` is the Vercel URL, not the Render URL. Clicking the Google button twice quickly can also cause it.
 - `redirect_uri_mismatch` (shown by Google): `GOOGLE_REDIRECT_URL` does not exactly match an authorized redirect URI in the Google Console.
@@ -580,11 +658,17 @@ Open the Render logs and find the `Google …failed:` line.
 **Login works locally but not online**
 Almost always cookies. Check HTTPS, `APP_ENV=PRODUCTION`, `FRONTEND_URL`, and that `VITE_API_URL=/api/v1` was set before the Vercel build so the browser calls the same origin.
 
+**A POST works locally but fails online with a CORS error or `405`**
+Check the browser Network tab for a `307` right before the failure. A trailing slash mismatch between the frontend call and the route makes FastAPI redirect to the Render URL, which bypasses the Vercel proxy. Define the route without a trailing slash (`@router.post("")` under a prefix) and call it without one. A `405` with no matching line in the Render log means the request never reached the backend, so check the base URL and the `vercel.json` rewrite.
+
 **The site loads but has no buttons, and requests stay "Pending"**
 The Vercel site cannot reach the backend. Check that the Render service is awake and live, and that `vercel.json` is inside `frontend/` and points at the right Render URL.
 
 **`ALLOW_ORIGINS` errors on startup**
 It must be a JSON list: `["https://your-site.vercel.app"]`.
+
+**The app fails to start with a validation error about a missing setting**
+Every field in `app/core/config.py` needs a default (`= None` is enough). A field written as `name: str | None` with no default is still required, even though `None` is allowed. Also remember that a variable in `.env` is only read if a field with the matching name exists in the settings class that loads it.
 
 **`password authentication failed for user "postgres"` with Supabase**
 The pooler needs the project reference in the user name: `postgres.<project-ref>`. Also check there is no whitespace or quote around the password.
@@ -595,8 +679,26 @@ The pooler closes idle connections. The engine uses `pool_pre_ping` and `pool_re
 **Emails do not arrive**
 Check that the sender is verified in Brevo, the templates are activated, IP blocking is off, and the Celery worker is running (look for `task_send_*` lines in the log). A `401` mentioning an unrecognised IP address means Brevo IP blocking is still on.
 
+**A receipt stays `pending`**
+The task never reached a worker. Check that the worker is running and connected to the broker, and look for `task_process_receipt` in the worker's task list. `Received unregistered task` means the worker is running old code, or `receipt_tasks` is missing from the `include` list in `task_queue.py`. The upload still succeeds on purpose when the broker is down, the failure is only logged. Also check that no other worker (for example one on your laptop) is connected to the same broker, because it can take the task and fail.
+
+**A receipt stays `processing` for a long time**
+Free models can be slow, and a scan can take up to about 100 seconds when the first model fails and the fallback is used. If it never finishes, the worker was probably restarted in the middle of the task. The task only claims `pending` receipts, so it will not pick that receipt up again. Delete it and upload again, or set its status to `failed` in the database.
+
+**A receipt ends as `failed`**
+The real reason is in the worker log (`Receipt N failed during extraction`). The user only sees a generic message. Common causes are an invalid `OPENROUTER_API_KEY`, free model rate limits (`429`) and a model that returns invalid JSON.
+
+**The Scan receipt button shows "This is taking too long, please try again later"**
+The frontend stops polling after 2 minutes (60 checks, 2 seconds apart), even if the backend is still working. Check the worker log for `task_process_receipt`. If the worker is running but slow, the receipt may still finish on its own and can be found through `GET /receipts/receipt`. If the worker is not running, see "A receipt stays `pending`" above.
+
+**The Scan receipt button says "Please choose a JPEG, PNG or WebP image" or "Image must be under 5 MB"**
+These checks run in the browser before anything is uploaded and match the backend limits. Pick a supported image under 5 MB. Photos from some phones are HEIC, which is not supported, so export them as JPEG first.
+
+**Upload returns a 5xx error, or the image link does not open**
+Check `BUCKET_ENDPOINT_URL`, `BUCKET_REGION` and the access keys, and that the bucket is named exactly like `BUCKET_NAME`. The storage check command in [Receipt scanning setup](#receipt-scanning-setup) tests the connection on its own.
+
 **`429 Too Many Requests` that does not clear**
-Rate limit counters live in Redis and keep the expiry they had when they were created, so editing the limits in code does not reset existing keys. Delete the `rate:*` keys in Redis (Upstash Data Browser or `redis-cli`) while testing.
+Rate limit counters live in Redis and keep the expiry they had when they were created, so editing the limits in code does not reset existing keys. Delete the `rate:*` keys in Redis (Upstash Data Browser or `redis-cli`) while testing. Demo accounts use the key `rate:guest:ip:<ip>` and receipt uploads use `rate:receipt:ip:<ip>` and `rate:receipt:id:<user id>`.
 
 **UptimeRobot reports `405`**
 The monitor sends `HEAD` and the route only allows `GET`. Use `@app.api_route("/health", methods=["GET", "HEAD"])`.
@@ -613,15 +715,20 @@ Render free instances sleep. Hit `/health` to wake the service, or let the Uptim
 
 - **Use `localhost` everywhere, never mix it with `127.0.0.1`.** Browsers treat them as different hosts. Mixing them causes cookies not to be sent and Google login to fail with `mismatching_state`. This applies to the frontend URL, the API URL, the Google redirect URL and the Google Console entry.
 - **Restart the Celery worker and beat after changing code or `.env`.** They load everything once at startup and do not auto-reload like `uvicorn --reload`.
+- **The deployed app runs its own worker.** If you run a local worker against the same broker as production, it competes for the same tasks. Test receipt scanning against the deployed app, or use a separate local broker.
 - **PostgreSQL and RabbitMQ credentials are only applied the first time their volume is created.** To change them, run `docker compose down -v` (this deletes the data) and start again.
 - **`DATABASE_PORT` must be `5433` locally** because the compose file maps host port 5433 to the container's 5432.
+- **Scripts you run by hand load `.env` by default.** `APP_ENV` decides which settings are used, so a one-off `python -c ...` command can talk to a different database than your running server. Check `settings.database_host` before running anything that writes data.
 - **Vite only reads `.env` at startup**, and only variables that start with `VITE_`. Restart `npm run dev` after editing it, and rebuild (or redeploy on Vercel) after changing one for production.
-- **Check `git status` before committing.** `.env`, every `.env.*` file, `venv/`, `node_modules/`, `__pycache__/` and `celerybeat-schedule*` must be ignored. Keep scratch notes that contain credentials out of the repository, and rotate any secret that was ever pasted somewhere public.
+- **Check `git status` before committing.** `.env`, every `.env.*` file, `venv/`, `node_modules/`, `__pycache__/` and `celerybeat-schedule*` must be ignored. Keep scratch notes and test scripts that contain credentials or sample receipts out of the repository, and rotate any secret that was ever pasted somewhere public.
 - **Save `requirements.txt` as UTF-8.** On Windows PowerShell, `pip freeze > requirements.txt` writes UTF-16, which pip inside Docker cannot read. Remove Windows-only packages (such as `pywin32`) from it too.
 - **Rebuild the image after code changes.** `docker run` uses whatever code was baked in at the last `docker build`. Only `--env-file` values are read at run time.
 - **`google_id` is nullable, never an empty string.** It is unique, so several empty strings would collide.
 - **Never compare password hashes with `==`.** Hashes are salted, so use the verify function.
 - **The user from the `CurrentUser` dependency belongs to a different database session** than the one in the route. Services reload the user by id before changing it.
+- **Money inside `extracted_data` is a string** (`"16.5"`), because JSON has no decimal type. Parse it on the client before sending it back (the review form does `Number(amount)` before confirming).
+- **Receipt model names live in settings, not in code.** Free models get renamed and removed often, so change `OPENROUTER_MODEL` instead of editing the extractor.
+- **The receipt polling limits are constants at the top of the Expenses page** (`POLL_INTERVAL_MS`, `POLL_MAX_TRIES`), and the upload limits (`RECEIPT_TYPES`, `MAX_RECEIPT_SIZE`) sit next to them. Keep them in line with the backend if the backend limits change.
 - **React StrictMode runs effects twice in development**, so you will see duplicate requests in the backend log. This does not happen in a production build.
 - **To change how the app looks, edit `frontend/src/theme.js`.** To change the cat, edit `frontend/src/components/Mascot/moods.js`. The cat currently uses emoji placeholders, and real artwork only needs that one file to change.
 
@@ -643,7 +750,7 @@ Automated tests are still on the roadmap; the `tests/` folder is empty for now.
 **Backend**
 
 - [x] Project structure, settings, async database layer
-- [x] Models and migrations (users, categories, expenses, budgets, recurring, reset tokens, Google ID)
+- [x] Models and migrations (users, categories, expenses, budgets, recurring, reset tokens, Google ID, receipts)
 - [x] Cookie-based JWT auth with refresh and password-change invalidation
 - [x] Email delivery through Brevo, queued with Celery and RabbitMQ
 - [x] Services and routers for categories, expenses, budgets, insights, recurring and users
@@ -651,13 +758,16 @@ Automated tests are still on the roadmap; the `tests/` folder is empty for now.
 - [x] Google sign-in flow (works through the Vercel proxy, redirects to the login page on failure)
 - [x] Scheduled Celery task for recurring expenses
 - [x] Local infrastructure with Docker Compose (PostgreSQL, Redis, RabbitMQ)
-- [x] Redis rate limiting (login, password reset)
+- [x] Redis rate limiting (login, password reset, demo accounts, receipt uploads)
 - [x] Account endpoints: update name, change password, delete account
 - [x] Dockerfile and cloud deployment (Render, Supabase, Upstash, CloudAMQP)
 - [x] Health route that checks the database, monitored by UptimeRobot
+- [x] Demo account endpoint with sample data and per-IP rate limiting
+- [x] Scheduled cleanup of old demo accounts
+- [x] Receipt scanning with Supabase Storage and an LLM (upload, list, view link, delete, confirm, background extraction with category matching)
+- [x] Delete the user's receipt files from Supabase Storage when an account is deleted
+- [ ] Mark receipts that stay in `processing` for too long as `failed` (scheduled cleanup)
 - [ ] Bank statement import: CSV parsing, preview and commit endpoints, duplicate detection
-- [ ] Receipt scanning with Cloudflare R2 and an LLM
-- [ ] Delete the user's receipt files from R2 when an account is deleted (once uploads exist)
 - [ ] Google sign-in: check `email_verified` before linking an existing account
 - [ ] Redis-backed refresh token revocation, so logout also invalidates the refresh token
 - [ ] Let logins continue (and log the error) when Redis is unreachable, instead of failing the request
@@ -680,11 +790,14 @@ Automated tests are still on the roadmap; the `tests/` folder is empty for now.
 - [x] Theme, responsive navbar and the cat mascot on every page except login and register
 - [x] Details dialogs for expenses, recurring items and budgets
 - [x] 404 page and dashboard restyle (simple bars instead of charts)
+- [x] Demo account sign-in from the login page
+- [x] Receipt scanning on the Expenses page: Scan receipt button, client-side file checks, polling and the review dialog before confirming
+- [ ] Show the receipt image next to the review form (the backend already provides a presigned URL)
+- [ ] Statement import screen (after the backend work)
 - [ ] Real cat artwork to replace the emoji placeholders
 - [ ] Terms and conditions page
 - [ ] Budgets summary card on the dashboard
 - [ ] Category management screen
-- [ ] Receipt upload and statement import screens (after the backend work)
 - [ ] Remove the unused `recharts` dependency and other unused imports
 
 ---
