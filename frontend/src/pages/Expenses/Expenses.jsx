@@ -6,7 +6,12 @@ import {
   updateExpense,
   exportCSV,
 } from "../../api/expenses";
-import { getReceipt, uploadReceipt, confirmReceipt } from "../../api/receipts";
+import {
+  getReceipt,
+  uploadReceipt,
+  confirmReceipt,
+  getReceiptURLByExpenseId,
+} from "../../api/receipts";
 import { getCategories } from "../../api/categories";
 import {
   Alert,
@@ -14,12 +19,15 @@ import {
   Button,
   Card,
   CardContent,
+  Chip,
   CircularProgress,
   Divider,
+  IconButton,
   MenuItem,
   Pagination,
   Stack,
   TextField,
+  Tooltip,
   Typography,
   Dialog,
   DialogActions,
@@ -27,6 +35,8 @@ import {
   DialogTitle,
   LinearProgress,
 } from "@mui/material";
+import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
+import DeleteOutlineIcon from "@mui/icons-material/DeleteOutlined";
 import { DatePicker } from "@mui/x-date-pickers/DatePicker";
 import dayjs from "dayjs";
 import Mascot from "../../components/Mascot/Mascot";
@@ -36,10 +46,13 @@ const MAX_RECEIPT_SIZE = 5 * 1024 * 1024; // 5 MB, same as the backend
 const POLL_INTERVAL_MS = 2000;
 const POLL_MAX_TRIES = 60; // 60 x 2 sec = 2 minutes
 
+// one look for the small labels, so they match everywhere
+const chipSx = { height: 22, fontSize: 12, borderRadius: 1.5 };
+
 function DetailRow({ label, value }) {
   return (
     <Box sx={{ py: 1.5 }}>
-      <Typography variant="body2" color="text.secondary">
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 0.25 }}>
         {label}
       </Typography>
       <Typography sx={{ overflowWrap: "anywhere" }}>{value}</Typography>
@@ -47,14 +60,101 @@ function DetailRow({ label, value }) {
   );
 }
 
-function ExpenseDetailsDialog({ expense, onClose, onEdit, onDelete }) {
+// Shows the receipt photo of one expense. It loads the link as soon as it opens,
+// and the link is short lived, so it is never stored anywhere.
+function ReceiptDialog({ expenseId, onClose }) {
+  const [url, setUrl] = useState("");
+  const [err, setErr] = useState("");
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setErr("");
+    getReceiptURLByExpenseId(expenseId)
+      .then((data) => {
+        if (!cancelled) setUrl(data.url);
+      })
+      .catch((error) => {
+        if (!cancelled) setErr(error.message);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [expenseId]);
+
+  return (
+    <Dialog open onClose={onClose} fullWidth maxWidth="sm">
+      <DialogTitle>Receipt</DialogTitle>
+      <DialogContent>
+        {loading && (
+          <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
+            <CircularProgress />
+          </Box>
+        )}
+        {err && <Alert severity="error">{err}</Alert>}
+        {url && (
+          <Box
+            component="img"
+            src={url}
+            alt="Receipt"
+            sx={{
+              width: "100%",
+              maxHeight: "70vh",
+              objectFit: "contain",
+              borderRadius: 1,
+              display: "block",
+              bgcolor: "action.hover",
+            }}
+          />
+        )}
+      </DialogContent>
+      <DialogActions sx={{ px: 3, pb: 2 }}>
+        <Button onClick={onClose}>Close</Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
+function ExpenseDetailsDialog({
+  expense,
+  onClose,
+  onEdit,
+  onDelete,
+  onViewReceipt,
+}) {
   return (
     <Dialog open onClose={onClose} fullWidth maxWidth="xs">
-      <DialogTitle>{expense.title}</DialogTitle>
+      <DialogTitle sx={{ pb: 0.5 }}>{expense.title}</DialogTitle>
       <DialogContent>
-        <Typography variant="h3" sx={{ mb: 1 }}>
+        <Typography variant="h3" sx={{ mt: 1, mb: 1.5 }}>
           {"₹" + Number(expense.amount).toLocaleString("en-IN")}
         </Typography>
+
+        {(expense.recurring_id || expense.receipt_key) && (
+          <Stack
+            direction="row"
+            sx={{ gap: 1, mb: 1.5, flexWrap: "wrap", alignItems: "center" }}
+          >
+            {expense.recurring_id && (
+              <Chip
+                size="small"
+                variant="outlined"
+                label="Recurring"
+                sx={chipSx}
+              />
+            )}
+            {expense.receipt_key && (
+              <Button size="small" onClick={onViewReceipt}>
+                View receipt
+              </Button>
+            )}
+          </Stack>
+        )}
+
         <Divider />
         <DetailRow label="Category" value={expense.category?.name || "None"} />
         <Divider />
@@ -76,7 +176,7 @@ function ExpenseDetailsDialog({ expense, onClose, onEdit, onDelete }) {
           </>
         )}
       </DialogContent>
-      <DialogActions>
+      <DialogActions sx={{ px: 3, pb: 2 }}>
         <Button color="error" onClick={onDelete}>
           Delete
         </Button>
@@ -122,6 +222,9 @@ function Expenses() {
   const [confirm, setConfirm] = useState(false); // saving the reviewed receipt
   const [confirmErr, setConfirmErr] = useState("");
   const fileInputRef = useRef(null);
+
+  // the expense whose receipt photo is open
+  const [receiptExpenseId, setReceiptExpenseId] = useState(null);
 
   // Loads the list again whenever the filter, the page or refreshKey changes.
   // The cancelled flag stops an older, slower response from overwriting a newer one.
@@ -336,60 +439,53 @@ function Expenses() {
     );
   }
 
+  const hasMessages = err || exportErr || delErr || scanErr || scanning;
+
   return (
-    <Box sx={{ maxWidth: 760, mx: "auto", mt: 4, px: 2, pb: 6 }}>
-      <Typography variant="h3" sx={{ mb: 1 }}>
+    <Box sx={{ maxWidth: 800, mx: "auto", mt: 4, px: { xs: 2, sm: 3 }, pb: 8 }}>
+      <Typography variant="h3" sx={{ mb: 1.5 }}>
         Expenses
       </Typography>
-      <Box sx={{ mb: 3 }}>
+      <Box sx={{ mb: 4 }}>
         <Mascot mood="focused" size={48} message="Ready when you are." />
       </Box>
 
-      {/* Title on the left, filter and buttons on the right */}
+      {/* Filter on the left, actions on the right. Wraps to two rows on small screens */}
       <Box
         sx={{
           display: "flex",
-          alignItems: "center",
+          alignItems: { xs: "stretch", md: "center" },
           justifyContent: "space-between",
-          flexWrap: "wrap",
+          flexDirection: { xs: "column", md: "row" },
           gap: 2,
-          mb: 2,
+          mb: 3,
         }}
       >
-        <Typography variant="h5">Your expenses</Typography>
+        <TextField
+          select
+          size="small"
+          label="Category"
+          value={categoryId}
+          onChange={(e) => {
+            setCategoryId(e.target.value);
+            setPage(1); // a new filter always starts from page 1
+          }}
+          sx={{ minWidth: { xs: "100%", md: 200 } }}
+        >
+          <MenuItem value="">All categories</MenuItem>
+          {categories.map((c) => (
+            <MenuItem key={c.id} value={c.id}>
+              {c.name}
+            </MenuItem>
+          ))}
+        </TextField>
+
         <Stack
           direction="row"
-          sx={{ gap: 1, alignItems: "center", flexWrap: "wrap" }}
+          sx={{ gap: 1.5, alignItems: "center", flexWrap: "wrap" }}
         >
-          <TextField
-            select
-            size="small"
-            label="Category"
-            value={categoryId}
-            onChange={(e) => {
-              setCategoryId(e.target.value);
-              setPage(1); // a new filter always starts from page 1
-            }}
-            sx={{ minWidth: 160 }}
-          >
-            <MenuItem value="">All categories</MenuItem>
-            {categories.map((c) => (
-              <MenuItem key={c.id} value={c.id}>
-                {c.name}
-              </MenuItem>
-            ))}
-          </TextField>
-          <Button variant="outlined" onClick={handleExport}>
+          <Button color="inherit" onClick={handleExport}>
             Export CSV
-          </Button>
-          <Button
-            variant="contained"
-            onClick={(e) => {
-              e.currentTarget.blur();
-              setFormOpen(true);
-            }}
-          >
-            Add expense
           </Button>
           <input
             type="file"
@@ -405,43 +501,36 @@ function Expenses() {
           >
             {scanning ? "Reading receipt..." : "Scan receipt"}
           </Button>
+          <Button
+            variant="contained"
+            onClick={(e) => {
+              e.currentTarget.blur();
+              setFormOpen(true);
+            }}
+          >
+            Add expense
+          </Button>
         </Stack>
       </Box>
 
-      {err && (
-        <Alert severity="error" sx={{ mb: 2 }}>
-          {err}
-        </Alert>
-      )}
-      {exportErr && (
-        <Alert severity="error" sx={{ mb: 2 }}>
-          {exportErr}
-        </Alert>
-      )}
-      {delErr && (
-        <Alert severity="error" sx={{ mb: 2 }}>
-          {delErr}
-        </Alert>
-      )}
-      {scanErr && (
-        <Alert severity="error" sx={{ mb: 2 }}>
-          {scanErr}
-        </Alert>
-      )}
-      {scanning && (
-        <Alert
-          severity="info"
-          icon={<CircularProgress size={18} />}
-          sx={{ mb: 2 }}
-        >
-          Reading your receipt, this can take up to a minute.
-        </Alert>
+      {hasMessages && (
+        <Stack sx={{ gap: 1.5, mb: 3 }}>
+          {err && <Alert severity="error">{err}</Alert>}
+          {exportErr && <Alert severity="error">{exportErr}</Alert>}
+          {delErr && <Alert severity="error">{delErr}</Alert>}
+          {scanErr && <Alert severity="error">{scanErr}</Alert>}
+          {scanning && (
+            <Alert severity="info" icon={<CircularProgress size={18} />}>
+              Reading your receipt, this can take up to a minute.
+            </Alert>
+          )}
+        </Stack>
       )}
 
       {!err && expenses.length === 0 && (
-        <Card>
-          <CardContent sx={{ textAlign: "center", py: 5 }}>
-            <Typography>No expenses yet.</Typography>
+        <Card variant="outlined" sx={{ borderRadius: 2 }}>
+          <CardContent sx={{ textAlign: "center", py: 6 }}>
+            <Typography sx={{ mb: 0.5 }}>No expenses yet.</Typography>
             <Typography variant="body2" color="text.secondary">
               Tap "Add expense" to log your first one.
             </Typography>
@@ -451,7 +540,10 @@ function Expenses() {
 
       {expenses.length > 0 && (
         <Card
+          variant="outlined"
           sx={{
+            borderRadius: 2,
+            overflow: "hidden",
             opacity: pageLoading ? 0.6 : 1,
             pointerEvents: pageLoading ? "none" : "auto",
             transition: "opacity 0.2s",
@@ -471,10 +563,11 @@ function Expenses() {
                   }}
                   sx={{
                     display: "flex",
-                    alignItems: "center",
-                    gap: 2,
-                    px: 3,
-                    py: 2,
+                    flexDirection: { xs: "column", sm: "row" },
+                    alignItems: { xs: "stretch", sm: "center" },
+                    gap: { xs: 1.5, sm: 3 },
+                    px: { xs: 2, sm: 3 },
+                    py: 2.5,
                     opacity: isDeleting ? 0.5 : 1,
                     cursor: isDeleting ? "default" : "pointer",
                     "&:hover": {
@@ -482,39 +575,108 @@ function Expenses() {
                     },
                   }}
                 >
+                  {/* left: what it is */}
                   <Box sx={{ flex: 1, minWidth: 0 }}>
                     <Typography sx={{ fontWeight: 600 }} noWrap>
                       {exp.title}
                     </Typography>
-                    <Typography variant="body2" color="text.secondary" noWrap>
-                      {exp.date}
-                      {exp.category?.name ? " · " + exp.category.name : ""}
-                    </Typography>
+                    <Box
+                      sx={{
+                        display: "flex",
+                        alignItems: "center",
+                        flexWrap: "wrap",
+                        columnGap: 1.5,
+                        rowGap: 0.75,
+                        mt: 0.75,
+                      }}
+                    >
+                      <Typography variant="body2" color="text.secondary">
+                        {exp.date}
+                        {exp.category?.name ? " · " + exp.category.name : ""}
+                      </Typography>
+                      {/* small labels: made by a recurring expense, has a receipt photo */}
+                      {exp.recurring_id && (
+                        <Chip
+                          size="small"
+                          variant="outlined"
+                          label="Recurring"
+                          sx={chipSx}
+                        />
+                      )}
+                      {exp.receipt_key && (
+                        <Chip
+                          size="small"
+                          variant="outlined"
+                          color="primary"
+                          label="Receipt"
+                          sx={chipSx}
+                          onClick={(e) => {
+                            e.stopPropagation(); // don't open the details dialog too
+                            setReceiptExpenseId(exp.id);
+                          }}
+                        />
+                      )}
+                    </Box>
                   </Box>
-                  <Typography sx={{ fontWeight: 700 }}>
-                    {"₹" + Number(exp.amount).toLocaleString("en-IN")}
-                  </Typography>
-                  <Button
-                    size="small"
-                    disabled={isDeleting}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleEdit(exp);
+
+                  {/* right: amount and actions */}
+                  <Box
+                    sx={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: { xs: "space-between", sm: "flex-end" },
+                      gap: 2,
+                      flexShrink: 0,
                     }}
                   >
-                    Edit
-                  </Button>
-                  <Button
-                    size="small"
-                    color="error"
-                    disabled={isDeleting}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDelete(exp.id);
-                    }}
-                  >
-                    {isDeleting ? "Deleting..." : "Delete"}
-                  </Button>
+                    <Typography
+                      sx={{
+                        fontWeight: 700,
+                        fontVariantNumeric: "tabular-nums",
+                        minWidth: { sm: 88 },
+                        textAlign: { sm: "right" },
+                      }}
+                    >
+                      {"₹" + Number(exp.amount).toLocaleString("en-IN")}
+                    </Typography>
+                    <Stack direction="row" sx={{ gap: 0.5 }}>
+                      <Tooltip title="Edit">
+                        <span>
+                          <IconButton
+                            size="small"
+                            aria-label="Edit expense"
+                            disabled={isDeleting}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleEdit(exp);
+                            }}
+                          >
+                            <EditOutlinedIcon fontSize="small" />
+                          </IconButton>
+                        </span>
+                      </Tooltip>
+                      <Tooltip title={isDeleting ? "Deleting..." : "Delete"}>
+                        <span>
+                          <IconButton
+                            size="small"
+                            color="error"
+                            aria-label="Delete expense"
+                            disabled={isDeleting}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDelete(exp.id);
+                            }}
+                          >
+                            {isDeleting ? (
+                              <CircularProgress size={18} color="inherit" />
+                            ) : (
+                              <DeleteOutlineIcon fontSize="small" />
+                            )}
+                          </IconButton>
+                        </span>
+                      </Tooltip>
+                    </Stack>
+                  </Box>
                 </Box>
               </Box>
             );
@@ -532,7 +694,9 @@ function Expenses() {
               : "Add expense"}
         </DialogTitle>
         <DialogContent>
-          <Box sx={{ display: "flex", flexDirection: "column", gap: 2, mt: 1 }}>
+          <Box
+            sx={{ display: "flex", flexDirection: "column", gap: 2.5, mt: 1 }}
+          >
             {receiptId && (
               <Alert severity="info">
                 We filled this in from your receipt. Please check it before
@@ -547,7 +711,7 @@ function Expenses() {
             <Box
               sx={{
                 display: "grid",
-                gap: 2,
+                gap: 2.5,
                 gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" },
               }}
             >
@@ -589,7 +753,7 @@ function Expenses() {
             )}
           </Box>
         </DialogContent>
-        <DialogActions>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
           <Button onClick={resetForm} disabled={formSubmit || confirm}>
             Cancel
           </Button>
@@ -638,11 +802,23 @@ function Expenses() {
             handleDelete(selected.id);
             setSelected(null);
           }}
+          onViewReceipt={() => {
+            setReceiptExpenseId(selected.id);
+            setSelected(null);
+          }}
+        />
+      )}
+
+      {/* Receipt photo dialog, only rendered while a Receipt chip was clicked */}
+      {receiptExpenseId && (
+        <ReceiptDialog
+          expenseId={receiptExpenseId}
+          onClose={() => setReceiptExpenseId(null)}
         />
       )}
 
       {totalPages > 1 && (
-        <Box sx={{ display: "flex", justifyContent: "center", mt: 2 }}>
+        <Box sx={{ display: "flex", justifyContent: "center", mt: 3 }}>
           <Pagination
             count={totalPages}
             page={page}

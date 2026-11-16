@@ -17,13 +17,22 @@ import {
   DialogContent,
   DialogTitle,
   Divider,
+  IconButton,
   Pagination,
+  Stack,
+  Tooltip,
   Typography,
 } from "@mui/material";
+import DeleteOutlineIcon from "@mui/icons-material/DeleteOutlined";
+import PauseCircleOutlinedIcon from "@mui/icons-material/PauseCircleOutlined";
+import PlayCircleOutlinedIcon from "@mui/icons-material/PlayCircleOutlined";
 import RecurringForm from "./RecurringForm";
 import Mascot from "../../components/Mascot/Mascot";
 
 const PAGE_SIZE = 10; // rows per page
+
+// same small label look as the Expenses page
+const chipSx = { height: 22, fontSize: 12, borderRadius: 1.5 };
 
 function formatMoney(value) {
   return "₹" + Number(value || 0).toLocaleString("en-IN");
@@ -42,7 +51,7 @@ function categoryName(r) {
 function DetailRow({ label, value }) {
   return (
     <Box sx={{ py: 1.5 }}>
-      <Typography variant="body2" color="text.secondary">
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 0.25 }}>
         {label}
       </Typography>
       <Typography sx={{ overflowWrap: "anywhere" }}>{value}</Typography>
@@ -67,9 +76,9 @@ function RecurringDetailsDialog({ item, action, onClose, onToggle, onDelete }) {
 
   return (
     <Dialog open onClose={onClose} fullWidth maxWidth="xs">
-      <DialogTitle>{item.title}</DialogTitle>
+      <DialogTitle sx={{ pb: 0.5 }}>{item.title}</DialogTitle>
       <DialogContent>
-        <Typography variant="h3" sx={{ mb: 1 }}>
+        <Typography variant="h3" sx={{ mt: 1, mb: 1.5 }}>
           {formatMoney(item.amount)}
         </Typography>
         <Divider />
@@ -83,7 +92,7 @@ function RecurringDetailsDialog({ item, action, onClose, onToggle, onDelete }) {
         <Divider />
         <DetailRow label="Notes" value={item.notes || "No notes"} />
       </DialogContent>
-      <DialogActions>
+      <DialogActions sx={{ px: 3, pb: 2 }}>
         <Button color="error" disabled={busy} onClick={onDelete}>
           {isDeleting ? "Deleting..." : "Delete"}
         </Button>
@@ -107,7 +116,7 @@ function DeleteConfirmDialog({ item, onClose, onConfirm }) {
           all the expenses it created so far, including past months?
         </Typography>
       </DialogContent>
-      <DialogActions sx={{ flexWrap: "wrap", gap: 1 }}>
+      <DialogActions sx={{ flexWrap: "wrap", gap: 1, px: 3, pb: 2 }}>
         <Button onClick={onClose}>Cancel</Button>
         <Box sx={{ flex: 1 }} />
         <Button onClick={() => onConfirm(false)}>Delete schedule only</Button>
@@ -231,12 +240,14 @@ function Recurring() {
     );
   }
 
+  const hasMessages = err || toggleErr || delErr;
+
   return (
-    <Box sx={{ maxWidth: 760, mx: "auto", mt: 4, px: 2, pb: 6 }}>
-      <Typography variant="h3" sx={{ mb: 1 }}>
+    <Box sx={{ maxWidth: 800, mx: "auto", mt: 4, px: { xs: 2, sm: 3 }, pb: 8 }}>
+      <Typography variant="h3" sx={{ mb: 1.5 }}>
         Recurring expenses
       </Typography>
-      <Box sx={{ mb: 3 }}>
+      <Box sx={{ mb: 4 }}>
         <Mascot
           mood="sleepy"
           size={56}
@@ -244,16 +255,15 @@ function Recurring() {
         />
       </Box>
 
-      {/* Title on the left, Add button on the right */}
+      {/* Add button on the right */}
       <Box
         sx={{
           display: "flex",
           alignItems: "center",
-          justifyContent: "space-between",
-          mb: 2,
+          justifyContent: "flex-end",
+          mb: 3,
         }}
       >
-        <Typography variant="h5">Your schedule</Typography>
         <Button
           variant="contained"
           onClick={(e) => {
@@ -265,26 +275,18 @@ function Recurring() {
         </Button>
       </Box>
 
-      {err && (
-        <Alert severity="error" sx={{ mb: 2 }}>
-          {err}
-        </Alert>
-      )}
-      {toggleErr && (
-        <Alert severity="error" sx={{ mb: 2 }}>
-          {toggleErr}
-        </Alert>
-      )}
-      {delErr && (
-        <Alert severity="error" sx={{ mb: 2 }}>
-          {delErr}
-        </Alert>
+      {hasMessages && (
+        <Stack sx={{ gap: 1.5, mb: 3 }}>
+          {err && <Alert severity="error">{err}</Alert>}
+          {toggleErr && <Alert severity="error">{toggleErr}</Alert>}
+          {delErr && <Alert severity="error">{delErr}</Alert>}
+        </Stack>
       )}
 
       {!err && recurring.length === 0 && (
-        <Card>
-          <CardContent sx={{ textAlign: "center", py: 5 }}>
-            <Typography>No recurring expenses yet.</Typography>
+        <Card variant="outlined" sx={{ borderRadius: 2 }}>
+          <CardContent sx={{ textAlign: "center", py: 6 }}>
+            <Typography sx={{ mb: 0.5 }}>No recurring expenses yet.</Typography>
             <Typography variant="body2" color="text.secondary">
               Add rent or a subscription and it runs on its own.
             </Typography>
@@ -293,12 +295,21 @@ function Recurring() {
       )}
 
       {recurring.length > 0 && (
-        <Card>
+        <Card variant="outlined" sx={{ borderRadius: 2, overflow: "hidden" }}>
           {visibleItems.map((r, i) => {
             const action = pending[r.id]; // undefined | "toggle" | "delete"
             const isDeleting = action === "delete";
             const isToggling = action === "toggle";
             const isBusy = Boolean(action);
+
+            // while toggling, r.active is already the new value
+            const toggleTitle = isToggling
+              ? r.active
+                ? "Resuming..."
+                : "Pausing..."
+              : r.active
+                ? "Pause"
+                : "Resume";
 
             return (
               <Box key={r.id}>
@@ -310,11 +321,11 @@ function Recurring() {
                   }}
                   sx={{
                     display: "flex",
-                    alignItems: "center",
-                    gap: 2,
-                    px: 3,
-                    py: 2,
-                    flexWrap: "wrap",
+                    flexDirection: { xs: "column", sm: "row" },
+                    alignItems: { xs: "stretch", sm: "center" },
+                    gap: { xs: 1.5, sm: 3 },
+                    px: { xs: 2, sm: 3 },
+                    py: 2.5,
                     opacity: isDeleting ? 0.5 : 1,
                     cursor: isDeleting ? "default" : "pointer",
                     "&:hover": {
@@ -322,50 +333,99 @@ function Recurring() {
                     },
                   }}
                 >
-                  <Box sx={{ flex: 1, minWidth: 160 }}>
-                    <Typography sx={{ fontWeight: 600 }}>{r.title}</Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      {capitalize(r.frequency)} · next: {r.next_date}
+                  {/* left: what it is */}
+                  <Box sx={{ flex: 1, minWidth: 0 }}>
+                    <Typography sx={{ fontWeight: 600 }} noWrap>
+                      {r.title}
                     </Typography>
+                    <Box
+                      sx={{
+                        display: "flex",
+                        alignItems: "center",
+                        flexWrap: "wrap",
+                        columnGap: 1.5,
+                        rowGap: 0.75,
+                        mt: 0.75,
+                      }}
+                    >
+                      <Typography variant="body2" color="text.secondary">
+                        {capitalize(r.frequency)} · next: {r.next_date}
+                      </Typography>
+                      <Chip
+                        size="small"
+                        label={r.active ? "Active" : "Paused"}
+                        color={r.active ? "primary" : "default"}
+                        variant={r.active ? "filled" : "outlined"}
+                        sx={chipSx}
+                      />
+                    </Box>
                   </Box>
-                  <Typography sx={{ fontWeight: 700 }}>
-                    {formatMoney(r.amount)}
-                  </Typography>
-                  <Chip
-                    size="small"
-                    label={r.active ? "Active" : "Paused"}
-                    color={r.active ? "primary" : "default"}
-                    variant={r.active ? "filled" : "outlined"}
-                  />
 
-                  <Button
-                    size="small"
-                    disabled={isBusy}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleToggle(r);
+                  {/* right: amount and actions */}
+                  <Box
+                    sx={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: { xs: "space-between", sm: "flex-end" },
+                      gap: 2,
+                      flexShrink: 0,
                     }}
                   >
-                    {isToggling
-                      ? r.active
-                        ? "Resuming..."
-                        : "Pausing..."
-                      : r.active
-                        ? "Pause"
-                        : "Resume"}
-                  </Button>
-                  <Button
-                    size="small"
-                    color="error"
-                    disabled={isBusy}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setDeleteTarget(r);
-                      //handleDelete(r);
-                    }}
-                  >
-                    {isDeleting ? "Deleting..." : "Delete"}
-                  </Button>
+                    <Typography
+                      sx={{
+                        fontWeight: 700,
+                        fontVariantNumeric: "tabular-nums",
+                        minWidth: { sm: 88 },
+                        textAlign: { sm: "right" },
+                      }}
+                    >
+                      {formatMoney(r.amount)}
+                    </Typography>
+                    <Stack direction="row" sx={{ gap: 0.5 }}>
+                      <Tooltip title={toggleTitle}>
+                        <span>
+                          <IconButton
+                            size="small"
+                            aria-label={r.active ? "Pause" : "Resume"}
+                            disabled={isBusy}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleToggle(r);
+                            }}
+                          >
+                            {isToggling ? (
+                              <CircularProgress size={18} color="inherit" />
+                            ) : r.active ? (
+                              <PauseCircleOutlinedIcon fontSize="small" />
+                            ) : (
+                              <PlayCircleOutlinedIcon fontSize="small" />
+                            )}
+                          </IconButton>
+                        </span>
+                      </Tooltip>
+                      <Tooltip title={isDeleting ? "Deleting..." : "Delete"}>
+                        <span>
+                          <IconButton
+                            size="small"
+                            color="error"
+                            aria-label="Delete recurring expense"
+                            disabled={isBusy}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDeleteTarget(r);
+                              //handleDelete(r);
+                            }}
+                          >
+                            {isDeleting ? (
+                              <CircularProgress size={18} color="inherit" />
+                            ) : (
+                              <DeleteOutlineIcon fontSize="small" />
+                            )}
+                          </IconButton>
+                        </span>
+                      </Tooltip>
+                    </Stack>
+                  </Box>
                 </Box>
               </Box>
             );
@@ -374,7 +434,7 @@ function Recurring() {
       )}
 
       {totalPages > 1 && (
-        <Box sx={{ display: "flex", justifyContent: "center", mt: 2 }}>
+        <Box sx={{ display: "flex", justifyContent: "center", mt: 3 }}>
           <Pagination
             count={totalPages}
             page={safePage}

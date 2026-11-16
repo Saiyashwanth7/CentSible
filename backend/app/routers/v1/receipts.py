@@ -60,12 +60,39 @@ async def receipt_import(
     return receipt
 
 
+@router.get(
+    "/receipt/by-expense/{expense_id}/url",
+    status_code=status.HTTP_200_OK,
+    response_model=ReceiptUrlResponse,
+)
+async def read_receipt_by_expense_id(
+    expense_id: int, session: SessionDep, user: CurrentUser
+):
+    url = await receipt_services.get_receipt_url_by_expense_id(
+        expense_id, user.id, session
+    )
+    return ReceiptUrlResponse(url=url)
+
+
 @router.get("/receipt/{receipt_id}/url", response_model=ReceiptUrlResponse)
 async def get_receipt_image_url(
     receipt_id: int, user: CurrentUser, session: SessionDep
 ):
     url = await receipt_services.get_receipt_image_url(receipt_id, user.id, session)
     return ReceiptUrlResponse(url=url)
+
+
+@router.get(
+    "/receipt/by-expense/{expense_id}/url",
+    status_code=status.HTTP_200_OK,
+    response_model=ReceiptUrlResponse,
+)
+async def read_receipt_by_expense_id(
+    expense_id: int, session: SessionDep, user: CurrentUser
+):
+    return await receipt_services.get_receipt_by_expense_id(
+        expense_id, user.id, session
+    )
 
 
 @router.get(

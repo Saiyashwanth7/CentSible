@@ -31,6 +31,18 @@ async def get_receipt_by_id(
     return receipt
 
 
+async def get_receipt_url_by_expense_id(
+    expense_id: str, user_id: int, session: AsyncSession
+) -> str:
+    stmt = select(Receipt).where(
+        Receipt.expense_id == expense_id, Receipt.owner_id == user_id
+    )
+    receipt = await session.scalar(stmt)
+    if receipt is None:
+        raise ReceiptDoesNotExist
+    return storage.get_receipt_url(receipt.file_key)
+
+
 async def list_receipts(
     user_id: int,
     session: AsyncSession,

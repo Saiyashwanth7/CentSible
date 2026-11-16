@@ -12,11 +12,16 @@ import {
   DialogContent,
   DialogTitle,
   Divider,
+  IconButton,
   LinearProgress,
   MenuItem,
+  Stack,
   TextField,
+  Tooltip,
   Typography,
 } from "@mui/material";
+import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
+import DeleteOutlineIcon from "@mui/icons-material/DeleteOutlined";
 import { useState, useEffect } from "react";
 import Mascot from "../../components/Mascot/Mascot";
 
@@ -73,7 +78,7 @@ function getBudgetCat(budgets) {
 function DetailRow({ label, value }) {
   return (
     <Box sx={{ py: 1.5 }}>
-      <Typography variant="body2" color="text.secondary">
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 0.25 }}>
         {label}
       </Typography>
       <Typography sx={{ overflowWrap: "anywhere" }}>{value}</Typography>
@@ -93,12 +98,12 @@ function BudgetDetailsDialog({ budget, onClose, onEdit, onDelete }) {
 
   return (
     <Dialog open onClose={onClose} fullWidth maxWidth="xs">
-      <DialogTitle>{budget.category}</DialogTitle>
+      <DialogTitle sx={{ pb: 0.5 }}>{budget.category}</DialogTitle>
       <DialogContent>
-        <Typography variant="h3" sx={{ mb: 0.5 }}>
+        <Typography variant="h3" sx={{ mt: 1, mb: 0.5 }}>
           {formatMoney(spent)}
         </Typography>
-        <Typography color="text.secondary" sx={{ mb: 2 }}>
+        <Typography color="text.secondary" sx={{ mb: 2.5 }}>
           {"spent of " + formatMoney(limit) + " this month"}
         </Typography>
         <LinearProgress
@@ -117,7 +122,7 @@ function BudgetDetailsDialog({ budget, onClose, onEdit, onDelete }) {
           value={formatMoney(Math.abs(limit - spent))}
         />
       </DialogContent>
-      <DialogActions>
+      <DialogActions sx={{ px: 3, pb: 2 }}>
         <Button color="error" onClick={onDelete}>
           Delete
         </Button>
@@ -252,24 +257,26 @@ function Budget() {
     );
   }
 
+  const hasMessages = err || catErr || delErr;
+
   return (
-    <Box sx={{ maxWidth: 760, mx: "auto", mt: 4, px: 2, pb: 6 }}>
-      <Typography variant="h3" sx={{ mb: 1 }}>
+    <Box sx={{ maxWidth: 800, mx: "auto", mt: 4, px: { xs: 2, sm: 3 }, pb: 8 }}>
+      <Typography variant="h3" sx={{ mb: 1.5 }}>
         Budgets
       </Typography>
-      <Box sx={{ mb: 3 }}>
+      <Box sx={{ mb: 4 }}>
         <Mascot mood={cat.mood} size={56} message={cat.message} />
       </Box>
 
+      {/* Add button on the right */}
       <Box
         sx={{
           display: "flex",
           alignItems: "center",
-          justifyContent: "space-between",
-          mb: 2,
+          justifyContent: "flex-end",
+          mb: 3,
         }}
       >
-        <Typography variant="h5">Your Budgets</Typography>
         <Button
           variant="contained"
           onClick={(e) => {
@@ -281,25 +288,18 @@ function Budget() {
         </Button>
       </Box>
 
-      {err && (
-        <Alert severity="error" sx={{ mb: 2 }}>
-          {err}
-        </Alert>
-      )}
-      {catErr && (
-        <Alert severity="error" sx={{ mb: 2 }}>
-          {catErr}
-        </Alert>
-      )}
-      {delErr && (
-        <Alert severity="error" sx={{ mb: 2 }}>
-          {delErr}
-        </Alert>
+      {hasMessages && (
+        <Stack sx={{ gap: 1.5, mb: 3 }}>
+          {err && <Alert severity="error">{err}</Alert>}
+          {catErr && <Alert severity="error">{catErr}</Alert>}
+          {delErr && <Alert severity="error">{delErr}</Alert>}
+        </Stack>
       )}
 
       {!err && budgets.length === 0 && (
-        <Card>
-          <CardContent>
+        <Card variant="outlined" sx={{ borderRadius: 2 }}>
+          <CardContent sx={{ textAlign: "center", py: 6 }}>
+            <Typography sx={{ mb: 0.5 }}>No budgets yet.</Typography>
             <Typography variant="body2" color="text.secondary">
               Tap "Add budget" to set your first limit.
             </Typography>
@@ -308,9 +308,10 @@ function Budget() {
       )}
 
       {budgets.length > 0 && (
-        <Card>
+        <Card variant="outlined" sx={{ borderRadius: 2, overflow: "hidden" }}>
           {budgets.map((bgt, i) => {
             const isDeleting = pending[bgt.id] === "delete";
+            const isOver = Number(bgt.spent) > Number(bgt.monthly_limit);
             return (
               <Box key={bgt.id}>
                 {i > 0 && <Divider />}
@@ -322,9 +323,9 @@ function Budget() {
                   sx={{
                     display: "flex",
                     alignItems: "center",
-                    gap: 2,
-                    px: 3,
-                    py: 2,
+                    gap: { xs: 1.5, sm: 3 },
+                    px: { xs: 2, sm: 3 },
+                    py: 2.5,
                     opacity: isDeleting ? 0.5 : 1,
                     cursor: isDeleting ? "default" : "pointer",
                     "&:hover": {
@@ -337,14 +338,19 @@ function Budget() {
                       sx={{
                         display: "flex",
                         justifyContent: "space-between",
+                        alignItems: "baseline",
                         gap: 2,
-                        mb: 1,
+                        mb: 1.25,
                       }}
                     >
                       <Typography sx={{ fontWeight: 600 }} noWrap>
                         {bgt.category}
                       </Typography>
-                      <Typography variant="body2" color="text.secondary">
+                      <Typography
+                        variant="body2"
+                        color="text.secondary"
+                        sx={{ fontVariantNumeric: "tabular-nums" }}
+                      >
                         {formatMoney(bgt.spent) +
                           " of " +
                           formatMoney(bgt.monthly_limit)}
@@ -355,15 +361,15 @@ function Budget() {
                       variant="determinate"
                       value={Math.min(usedPercent(bgt), 100)}
                       color={budgetColor(usedPercent(bgt))}
-                      sx={{ height: 10, borderRadius: 999 }}
+                      sx={{ height: 8, borderRadius: 999 }}
                     />
 
                     <Typography
                       variant="caption"
-                      color="text.secondary"
-                      sx={{ display: "block", mt: 0.5 }}
+                      color={isOver ? "error" : "text.secondary"}
+                      sx={{ display: "block", mt: 0.75 }}
                     >
-                      {Number(bgt.spent) > Number(bgt.monthly_limit)
+                      {isOver
                         ? "Over budget by " +
                           formatMoney(
                             Number(bgt.spent) - Number(bgt.monthly_limit),
@@ -372,27 +378,43 @@ function Budget() {
                     </Typography>
                   </Box>
 
-                  <Button
-                    size="small"
-                    disabled={isDeleting}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleEdit(bgt);
-                    }}
-                  >
-                    Edit
-                  </Button>
-                  <Button
-                    size="small"
-                    color="error"
-                    disabled={isDeleting}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDelete(bgt.id);
-                    }}
-                  >
-                    {isDeleting ? "Deleting..." : "Delete"}
-                  </Button>
+                  <Stack direction="row" sx={{ gap: 0.5, flexShrink: 0 }}>
+                    <Tooltip title="Edit">
+                      <span>
+                        <IconButton
+                          size="small"
+                          aria-label="Edit budget"
+                          disabled={isDeleting}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleEdit(bgt);
+                          }}
+                        >
+                          <EditOutlinedIcon fontSize="small" />
+                        </IconButton>
+                      </span>
+                    </Tooltip>
+                    <Tooltip title={isDeleting ? "Deleting..." : "Delete"}>
+                      <span>
+                        <IconButton
+                          size="small"
+                          color="error"
+                          aria-label="Delete budget"
+                          disabled={isDeleting}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDelete(bgt.id);
+                          }}
+                        >
+                          {isDeleting ? (
+                            <CircularProgress size={18} color="inherit" />
+                          ) : (
+                            <DeleteOutlineIcon fontSize="small" />
+                          )}
+                        </IconButton>
+                      </span>
+                    </Tooltip>
+                  </Stack>
                 </Box>
               </Box>
             );
@@ -406,7 +428,9 @@ function Budget() {
           {editingId ? "Edit budget: " + editingName : "Add budget"}
         </DialogTitle>
         <DialogContent>
-          <Box sx={{ display: "flex", flexDirection: "column", gap: 2, mt: 1 }}>
+          <Box
+            sx={{ display: "flex", flexDirection: "column", gap: 2.5, mt: 1 }}
+          >
             {/* The category can't change while editing, so the field is hidden */}
             {!editingId && (
               <TextField
@@ -437,7 +461,7 @@ function Budget() {
             {formErr && <Alert severity="error">{formErr}</Alert>}
           </Box>
         </DialogContent>
-        <DialogActions>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
           <Button onClick={resetForm} disabled={formSubmit}>
             Cancel
           </Button>

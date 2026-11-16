@@ -40,3 +40,7 @@ export function confirmReceipt(
     }),
   });
 }
+
+export function getReceiptURLByExpenseId(expenseId) {
+  return apiFetch("/receipts/receipt/by-expense/" + expenseId + "/url");
+}
